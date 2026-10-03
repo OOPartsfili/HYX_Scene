@@ -10,7 +10,7 @@ LOOKS = {
     'daylight': {'name':'自然日光','weather':{'sun_altitude_angle':45,'sun_azimuth_angle':265,'cloudiness':25,'fog_density':.5,'fog_distance':100,'wetness':0,'precipitation':0,'precipitation_deposits':0},'camera':{'gamma':2.2,'motion_blur_intensity':0,'exposure_compensation':-.25,'bloom_intensity':.08}},
     'golden': {'name':'低角度日光','weather':{'sun_altitude_angle':18,'sun_azimuth_angle':245,'cloudiness':15,'fog_density':1.5,'fog_distance':100,'wetness':0,'precipitation':0,'precipitation_deposits':0},'camera':{'gamma':2.2,'motion_blur_intensity':0,'exposure_compensation':-.2,'bloom_intensity':.12}},
     'wet': {'name':'雨天试验 · map10 天空适配待修','weather':{'sun_altitude_angle':38,'sun_azimuth_angle':250,'cloudiness':80,'wetness':70,'precipitation':8,'precipitation_deposits':25,'fog_density':3,'fog_distance':80},'camera':{'gamma':2.2,'motion_blur_intensity':0,'exposure_compensation':0,'bloom_intensity':.08}},
-    'dusk': {'name':'暮色 / 车灯','weather':{'sun_altitude_angle':-3,'sun_azimuth_angle':270,'cloudiness':30,'wetness':15,'precipitation':0,'precipitation_deposits':0,'fog_density':2,'fog_distance':100},'camera':{'gamma':2.2,'motion_blur_intensity':0,'exposure_compensation':.3,'bloom_intensity':.18}},
+    'dusk': {'name':'暮色环境','weather':{'sun_altitude_angle':-3,'sun_azimuth_angle':270,'cloudiness':30,'wetness':15,'precipitation':0,'precipitation_deposits':0,'fog_density':2,'fog_distance':100},'camera':{'gamma':2.2,'motion_blur_intensity':0,'exposure_compensation':.3,'bloom_intensity':.18}},
 }
 WEATHER_LIMITS={'sun_altitude_angle':(-90,90),'sun_azimuth_angle':(0,360),'cloudiness':(0,100),'precipitation':(0,100),'precipitation_deposits':(0,100),'wetness':(0,100),'wind_intensity':(0,100),'fog_density':(0,100),'fog_distance':(0,1000),'fog_falloff':(0,5)}
 CAMERA_LIMITS={'gamma':(.5,4),'exposure_compensation':(-5,5),'bloom_intensity':(0,3),'motion_blur_intensity':(0,1),'fstop':(1,32),'shutter_speed':(1,2000),'iso':(50,3200),'temp':(1500,15000),'tint':(-1,1),'slope':(0,1),'toe':(0,1),'shoulder':(0,1)}
@@ -71,6 +71,8 @@ def validate(data):
             for k in ('x','y','z'):p[k]=number(p.get(k,0),-100000,100000,'路线 '+k)
     s.setdefault('ego',actors[0]['id'])
     if s['ego'] not in ids:raise ValueError('主视角参与者不存在')
+    if not next(a for a in actors if a['id']==s['ego'])['model'].startswith('vehicle.'):
+        raise ValueError('主车必须为车辆，才能随时切换手动驾驶')
     if not next(a for a in actors if a['id']==s['ego'])['spawn_at_start']:raise ValueError('主视角参与者必须在开始时生成')
     clip_ids=set()
     for actor in actors:
@@ -117,6 +119,7 @@ def validate(data):
         for ref in [t.get('actor'),t.get('target'),a.get('actor'),a.get('target')]:
             if ref and ref not in ids:raise ValueError('事件引用不存在的参与者：'+str(ref))
         if a['type'] not in ('weather','marker','finish') and a.get('actor') not in ids:raise ValueError('动作需要指定参与者')
+        if a['type']=='destroy' and a.get('actor')==s['ego']:raise ValueError('运行中不能销毁主车；结束场景请使用结束动作')
         if t['type']!='time' and t['type']!='after_event' and t.get('actor') not in ids:raise ValueError('触发器需要指定参与者')
         if t['type']=='distance' and t.get('target') not in ids:raise ValueError('距离条件需要目标参与者')
         if t['type']=='after_event' and (t.get('event') not in event_ids or t.get('event')==e['id']):raise ValueError('前置事件引用无效')

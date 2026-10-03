@@ -1,13 +1,15 @@
 """Exercise every behavior preset on the live custom map10 with measurable motion."""
 import copy
 import json
+import argparse
 from test_studio_v2_live import api,wait,finish,rows,ROOT,OUT
 
 
 def main():
+    parser=argparse.ArgumentParser();parser.add_argument('--presets',nargs='+',default=['cruise','stop_go','lead_brake','cut_in','overtake','follow','parked']);args=parser.parse_args()
     template=api('scenes/Timeline_Demo');results=[]
     try:
-        for name in ('cruise','stop_go','lead_brake','cut_in','overtake','follow','parked'):
+        for name in args.presets:
             scene=copy.deepcopy(template);scene.update(id='preset_acceptance',name='预设验收 '+name,duration=25,events=[])
             scene['actors']=scene['actors'][:1];scene['actors'][0]['clips']=[]
             target=None
@@ -34,7 +36,8 @@ def main():
     finally:
         if api('status')['state'] in ('running','paused','preview','starting'):
             api('command',{'type':'stop'});finish()
-        (OUT/'preset_acceptance.json').write_text(json.dumps({'passed':len(results)==7,'results':results},indent=2),encoding='utf-8')
+        filename='preset_acceptance.json' if len(args.presets)==7 else 'preset_'+'_'.join(args.presets)+'.json'
+        (OUT/filename).write_text(json.dumps({'passed':len(results)==len(args.presets),'results':results},indent=2),encoding='utf-8')
     print('ALL PRESETS PASS',results,flush=True)
 
 

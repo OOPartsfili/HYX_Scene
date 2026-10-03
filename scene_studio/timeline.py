@@ -34,6 +34,21 @@ def preset(name,actor,duration,target=None):
 def smooth(u):
     u=max(0,min(1,u));return u*u*u*(10+u*(-15+6*u))
 
+def apply_behavior_preset(scene,actor_id,name,target=None):
+    """Replace one actor's motion without breaking cross-actor event dependencies."""
+    scene=copy.deepcopy(scene)
+    actor=next(a for a in scene['actors'] if a['id']==actor_id)
+    replacement=preset(name,actor,scene['duration'],target)
+    scene['actors']=[replacement if a['id']==actor_id else a for a in scene['actors']]
+    replaced=[]
+    for event in scene.get('events',[]):
+        action=event['action']
+        if action.get('actor')==actor_id and action['type'] in ('speed','brake','offset','lane_change','follow','route') and event.get('enabled',True):
+            event['replaced_action']=action
+            event['action']={'type':'marker','label':'行为预设替代原运动动作'}
+            replaced.append(event['id'])
+    return scene,replaced
+
 def motion_at(actor,t,lane_width=3.5):
     """Persistent speed/lane targets; brake/follow/light clips have explicit windows."""
     speed=actor.get('speed',0);offset=actor.get('offset',0);brake=None;follow=None;lights=None;active=[]

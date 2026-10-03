@@ -6,6 +6,32 @@ from scene_studio.recording import Recording,RecordingWriter
 ROOT=Path(__file__).resolve().parents[1]
 class TimelineTests(unittest.TestCase):
     def setUp(self):self.scene=validate(json.loads((ROOT/'scene_studio/templates/Scene1_01.json').read_text(encoding='utf-8')))
+    def test_follow_reserves_distance_for_reaction_before_braking(self):
+        from traffic_math import follow_speed
+        speed,_=follow_speed(20,0,20,headway=.1,min_gap=4,decel=4,reaction_time=1)
+        self.assertLessEqual(speed*1+speed*speed/(2*4),20-4+1e-9)
+        no_delay,_=follow_speed(20,0,20,headway=.1,min_gap=4,decel=4)
+        self.assertGreater(no_delay,speed)
+    def test_preset_replacement_preserves_dependent_event_triggers(self):
+        from scene_studio.timeline import apply_behavior_preset
+        event=next(e for e in self.scene['events'] if e['action']['type']=='speed')
+        result,replaced=apply_behavior_preset(self.scene,event['action']['actor'],'cruise')
+        self.assertIn(event['id'],replaced)
+        updated={e['id']:e for e in result['events']}
+        for old in self.scene['events']:
+            self.assertEqual(updated[old['id']]['trigger'],old['trigger'])
+            self.assertEqual(updated[old['id']].get('enabled',True),old.get('enabled',True))
+        self.assertEqual(updated[event['id']]['action']['type'],'marker')
+        self.assertEqual(event['action']['type'],'speed')
+        validate(result)
+    def test_main_vehicle_remains_available_for_takeover(self):
+        scene=copy.deepcopy(self.scene)
+        ego=next(a for a in scene['actors'] if a['id']==scene['ego'])
+        ego.update(model='walker.pedestrian.0001',behavior='walker')
+        with self.assertRaises(ValueError):validate(scene)
+        scene=copy.deepcopy(self.scene)
+        scene['events']=[{'id':'remove_ego','trigger':{'type':'time','value':2},'action':{'type':'destroy','actor':scene['ego']}}]
+        with self.assertRaises(ValueError):validate(scene)
     def test_speed_curve_and_lane_curve_are_independent(self):
         a={'speed':20,'offset':0,'clips':[{'id':'speed','type':'speed','start':2,'duration':4,'value':60},{'id':'lane','type':'lane_change','start':3,'duration':2,'direction':'left','lanes':1}]}
         self.assertEqual(motion_at(a,1)['speed'],20)

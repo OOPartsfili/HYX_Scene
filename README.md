@@ -72,9 +72,10 @@ python -m unittest discover -s tests -v
 ```powershell
 python tools/test_studio_v2_live.py
 python tools/test_studio_replay_edges.py
+python tools/test_studio_presets_live.py
 ```
 
-第一项验证实际录制/重放的逐帧姿态与速度、手动优先级、背景车一致性、输入中断制动和旧输入拒绝。第二项重复检查不同光照的重放一致性，并验证暂停时接管保留速度。结果写入本地 `optimization_reports/studio_v2/`。
+第一项验证实际录制/重放的逐帧姿态与速度、手动优先级、背景车一致性、输入中断制动和旧输入拒绝。第二项重复检查不同光照的重放一致性，并验证暂停时接管保留速度。第三项逐一验证七种行为预设的速度、横向运动与碰撞记录。结果写入本地 `optimization_reports/studio_v2/`。
 
 编辑器预演不模拟动态跟车、条件触发和碰撞。旧 Scene 条件事件模板保留，新的物理控制不保证旧试次轨迹完全一致。正式实验需另行核验风险显现时刻、车距和接管时序。
 

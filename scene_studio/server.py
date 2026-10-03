@@ -14,7 +14,7 @@ from flask import Flask,Response,jsonify,request,send_from_directory
 import carla
 from scene_studio.schema import validate,LOOKS,ACTIONS,TRIGGERS
 from scene_studio.schema import number
-from scene_studio.timeline import PRESETS,preset,motion_hash
+from scene_studio.timeline import PRESETS,apply_behavior_preset,motion_hash
 from scene_studio.planning import Planner
 from scene_studio.recording import Recording
 
@@ -194,14 +194,8 @@ def plan():
 def apply_preset():
     p=request.get_json();s=validate(p['scene'])
     if s['mode']=='environment':raise ValueError('固定轨迹模式不能修改行为预设')
-    target=next(a for a in s['actors'] if a['id']==p['actor'])
-    replacement=preset(p['preset'],target,s['duration'],p.get('target'))
-    s['actors']=[replacement if a['id']==target['id'] else a for a in s['actors']]
-    disabled=[]
-    for e in s['events']:
-        if e['action'].get('actor')==target['id'] and e['action']['type'] in ('speed','brake','offset','lane_change','follow','route') and e.get('enabled',True):
-            e['enabled']=False;disabled.append(e['id'])
-    return jsonify(scene=validate(s),disabled_events=disabled)
+    s,replaced=apply_behavior_preset(s,p['actor'],p['preset'],p.get('target'))
+    return jsonify(scene=validate(s),replaced_actions=replaced)
 
 
 @app.get('/api/takes')

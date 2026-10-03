@@ -24,6 +24,7 @@ from scene_studio.schema import validate,look_values,triggered
 from scene_studio.timeline import ControlOwner,motion_at,pose_on_path
 from scene_studio.recording import Recording,RecordingWriter
 from scene_studio.planning import Planner
+from traffic_math import follow_speed
 
 WEATHER_KEYS=('cloudiness','precipitation','precipitation_deposits','wind_intensity','sun_azimuth_angle','sun_altitude_angle','fog_density','fog_distance','fog_falloff','wetness','scattering_intensity','mie_scattering_scale','rayleigh_scattering_scale','dust_storm')
 def weather_dict(w):return {k:getattr(w,k) for k in WEATHER_KEYS if hasattr(w,k)}
@@ -39,6 +40,15 @@ class StudioDriver(LegacyDriver):
     def follow_road(self):
         # Legacy lane-change helpers call this method; never create a second writer.
         return
+    def _desired_speed(self,now):
+        desired,emergency=super()._desired_speed(now)
+        if self._history:
+            _,lead_speed,gap=self._history[0]
+            delayed,stop=follow_speed(self.speed_limit/3.6,lead_speed,gap,
+                headway=getattr(self,'_headway',1.5),min_gap=self._min_gap,
+                decel=min(4.,self.spec['deceleration']),reaction_time=self._reaction_time+.35)
+            desired=min(desired,delayed);emergency=emergency or stop
+        return desired,emergency
     def rejoin(self):
         loc=self.vice_car.get_location()
         if self.route:self.route_index=min(range(len(self.route)),key=lambda i:loc.distance(self.route[i].transform.location))

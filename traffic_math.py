@@ -1,14 +1,16 @@
 """不依赖 CARLA 的控车计算，速度单位均为 m/s，距离单位为 m。"""
 import math
 
-def follow_speed(cruise, lead_speed, gap, headway=1.5, min_gap=3.0, decel=4.0):
+def follow_speed(cruise, lead_speed, gap, headway=1.5, min_gap=3.0, decel=4.0, reaction_time=0.0):
     """时间车距与制动距离双重约束；返回目标速度及紧急停车标志。"""
-    if headway <= 0 or min_gap < 0 or decel <= 0:
+    if headway <= 0 or min_gap < 0 or decel <= 0 or reaction_time < 0:
         raise ValueError('Invalid following parameters')
     gap = max(0.0, gap)
     lead_speed = max(0.0, lead_speed)
     free_gap = max(0.0, gap - min_gap)
-    braking_limit = math.sqrt(lead_speed ** 2 + 2 * decel * free_gap)
+    # v*tau + v²/(2b) <= free_gap + lead_speed²/(2b).
+    # Reserve distance for delayed perception and controller response.
+    braking_limit = math.sqrt((decel*reaction_time)**2 + lead_speed ** 2 + 2 * decel * free_gap)-decel*reaction_time
     time_limit = free_gap / headway
     return max(0.0, min(cruise, braking_limit, time_limit)), gap <= min_gap
 
