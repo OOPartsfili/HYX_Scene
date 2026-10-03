@@ -1,0 +1,59 @@
+# data
+carla_data/
+log_data/
+实验场景相关/
+
+# 硬件连接
+logitech/
+sensor/
+sensor_script/
+
+
+
+# python
+__pycache__/
+*.pyc
+
+# ide
+.idea/
+.vscode/
+
+# Local runs, participant data and generated reports
+studio_data/
+optimization_reports/
+optimization_report.html
+map10_comparison.html
+score_data/
+Gazing_point_program/
+check_IS/
+TTF/
+*.zip
+*.sai2
+*.log
+*.tmp
+*.mp4
+*.avi
+*.csv
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials*.json
+.venv/
+venv/
+node_modules/
+.pytest_cache/
+optimization_backup/*
+!optimization_backup/20261001/
+optimization_backup/20261001/*
+!optimization_backup/20261001/Scene1_01.py
+!optimization_backup/20261001/Scene1_02.py
+!optimization_backup/20261001/Scene1_03.py
+!optimization_backup/20261001/Scene1_04.py
+!optimization_backup/20261001/Scene1_05.py
+!optimization_backup/20261001/Scene1_06.py
+!optimization_backup/20261001/Scene2.py
+!optimization_backup/20261001/Set_sensor.py
+asset/*
+!asset/123V1.0.png

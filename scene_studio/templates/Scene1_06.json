@@ -1,0 +1,368 @@
+{
+  "version": 2,
+  "id": "Scene1_06",
+  "name": "Scene1_06 · 原场景可编辑模板",
+  "map": "package/Maps/map10/map10",
+  "duration": 50.0,
+  "seed": 42,
+  "ego": "ego",
+  "actors": [
+    {
+      "id": "car1",
+      "name": "Car1",
+      "model": "vehicle.audi.tt",
+      "x": 696.4434204101562,
+      "y": -657.0,
+      "z": 8.988245010375977,
+      "yaw": 90.0,
+      "speed": 50.0,
+      "offset": 0.0,
+      "behavior": "scripted",
+      "start_in_motion": true,
+      "spawn_at_start": true,
+      "snap": true,
+      "color": "#d5dce1",
+      "route": [],
+      "acceleration": 2.5,
+      "deceleration": 6.0,
+      "role": "background",
+      "clips": []
+    },
+    {
+      "id": "car2",
+      "name": "Car2",
+      "model": "vehicle.audi.tt",
+      "x": 692.9434204101562,
+      "y": -597.0,
+      "z": 8.988245010375977,
+      "yaw": 90.0,
+      "speed": 50.0,
+      "offset": 0.0,
+      "behavior": "scripted",
+      "start_in_motion": true,
+      "spawn_at_start": true,
+      "snap": true,
+      "color": "#d5dce1",
+      "route": [],
+      "acceleration": 2.5,
+      "deceleration": 6.0,
+      "role": "background",
+      "clips": []
+    },
+    {
+      "id": "car3",
+      "name": "Car3",
+      "model": "vehicle.carlamotors.firetruck",
+      "x": 689.4434204101562,
+      "y": -652.0,
+      "z": 8.988245010375977,
+      "yaw": 90.0,
+      "speed": 50.0,
+      "offset": 0.0,
+      "behavior": "scripted",
+      "start_in_motion": true,
+      "spawn_at_start": true,
+      "snap": true,
+      "color": "#d5dce1",
+      "route": [],
+      "acceleration": 2.5,
+      "deceleration": 6.0,
+      "role": "background",
+      "clips": []
+    },
+    {
+      "id": "car4",
+      "name": "Car4",
+      "model": "vehicle.kawasaki.ninja",
+      "x": 685.9434204101562,
+      "y": -648.0,
+      "z": 8.988245010375977,
+      "yaw": 90.0,
+      "speed": 50.0,
+      "offset": 0.0,
+      "behavior": "scripted",
+      "start_in_motion": true,
+      "spawn_at_start": true,
+      "snap": true,
+      "color": "#d5dce1",
+      "route": [],
+      "acceleration": 2.5,
+      "deceleration": 6.0,
+      "role": "background",
+      "clips": []
+    },
+    {
+      "id": "ego",
+      "name": "主车",
+      "model": "vehicle.tesla.model3",
+      "x": 692.9434204101562,
+      "y": -637.0,
+      "z": 8.988245010375977,
+      "yaw": 90.0,
+      "speed": 50.0,
+      "offset": 0.0,
+      "behavior": "scripted",
+      "start_in_motion": true,
+      "spawn_at_start": true,
+      "snap": true,
+      "color": "#d5dce1",
+      "route": [],
+      "acceleration": 2.5,
+      "deceleration": 6.0,
+      "role": "ego",
+      "clips": []
+    }
+  ],
+  "events": [
+    {
+      "id": "gate_0",
+      "name": "位置阶段",
+      "trigger": {
+        "type": "position",
+        "actor": "ego",
+        "axis": "y",
+        "op": ">=",
+        "value": -537.0
+      },
+      "action": {
+        "type": "marker",
+        "label": "gate_0"
+      }
+    },
+    {
+      "id": "event_1",
+      "name": "speed",
+      "trigger": {
+        "type": "after_event",
+        "event": "gate_0",
+        "value": 0.0
+      },
+      "action": {
+        "type": "speed",
+        "actor": "car2",
+        "value": 33.0
+      }
+    },
+    {
+      "id": "event_2",
+      "name": "speed",
+      "trigger": {
+        "type": "after_event",
+        "event": "gate_0",
+        "value": 0.0
+      },
+      "action": {
+        "type": "speed",
+        "actor": "ego",
+        "value": 40.0
+      }
+    },
+    {
+      "id": "event_3",
+      "name": "speed",
+      "trigger": {
+        "type": "after_event",
+        "event": "gate_0",
+        "value": 0.0
+      },
+      "action": {
+        "type": "speed",
+        "actor": "car3",
+        "value": 53.0
+      }
+    },
+    {
+      "id": "event_4",
+      "name": "speed",
+      "trigger": {
+        "type": "after_event",
+        "event": "gate_0",
+        "value": 0.0
+      },
+      "action": {
+        "type": "speed",
+        "actor": "car4",
+        "value": 53.5
+      }
+    },
+    {
+      "id": "gate_5",
+      "name": "位置阶段",
+      "trigger": {
+        "type": "position",
+        "actor": "ego",
+        "axis": "y",
+        "op": ">=",
+        "value": -437.0
+      },
+      "action": {
+        "type": "marker",
+        "label": "gate_5"
+      }
+    },
+    {
+      "id": "event_5",
+      "name": "speed",
+      "trigger": {
+        "type": "after_event",
+        "event": "gate_5",
+        "value": 0.0
+      },
+      "action": {
+        "type": "speed",
+        "actor": "car1",
+        "value": 60.0
+      }
+    },
+    {
+      "id": "event_6",
+      "name": "speed",
+      "trigger": {
+        "type": "after_event",
+        "event": "gate_5",
+        "value": 0.0
+      },
+      "action": {
+        "type": "speed",
+        "actor": "car2",
+        "value": 62.0
+      }
+    },
+    {
+      "id": "event_7",
+      "name": "speed",
+      "trigger": {
+        "type": "after_event",
+        "event": "gate_5",
+        "value": 0.0
+      },
+      "action": {
+        "type": "speed",
+        "actor": "ego",
+        "value": 50.0
+      }
+    },
+    {
+      "id": "event_8",
+      "name": "speed",
+      "trigger": {
+        "type": "after_event",
+        "event": "gate_5",
+        "value": 0.0
+      },
+      "action": {
+        "type": "speed",
+        "actor": "car3",
+        "value": 48.0
+      }
+    },
+    {
+      "id": "event_9",
+      "name": "speed",
+      "trigger": {
+        "type": "after_event",
+        "event": "gate_5",
+        "value": 0.0
+      },
+      "action": {
+        "type": "speed",
+        "actor": "car4",
+        "value": 52.0
+      }
+    },
+    {
+      "id": "gate_11",
+      "name": "位置阶段",
+      "trigger": {
+        "type": "position",
+        "actor": "ego",
+        "axis": "y",
+        "op": ">=",
+        "value": -337.0
+      },
+      "action": {
+        "type": "marker",
+        "label": "gate_11"
+      }
+    },
+    {
+      "id": "event_10",
+      "name": "speed",
+      "trigger": {
+        "type": "after_event",
+        "event": "gate_11",
+        "value": 0.0
+      },
+      "action": {
+        "type": "speed",
+        "actor": "car2",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "event_11",
+      "name": "lane_change",
+      "trigger": {
+        "type": "after_event",
+        "event": "gate_11",
+        "value": 2.0
+      },
+      "action": {
+        "type": "lane_change",
+        "actor": "ego",
+        "direction": "left",
+        "lanes": 1,
+        "distance": 20.0
+      }
+    },
+    {
+      "id": "gate_14",
+      "name": "位置阶段",
+      "trigger": {
+        "type": "position",
+        "actor": "ego",
+        "axis": "y",
+        "op": ">=",
+        "value": -237.0
+      },
+      "action": {
+        "type": "marker",
+        "label": "gate_14"
+      }
+    },
+    {
+      "id": "event_12",
+      "name": "finish",
+      "trigger": {
+        "type": "after_event",
+        "event": "gate_14",
+        "value": 0.0
+      },
+      "action": {
+        "type": "finish"
+      }
+    }
+  ],
+  "look": {
+    "preset": "original",
+    "weather": {},
+    "camera": {}
+  },
+  "camera": {
+    "width": 1280,
+    "height": 720,
+    "fps": 20.0,
+    "fov": 100.0
+  },
+  "view": {
+    "x": 692.9434204101562,
+    "y": -567.0
+  },
+  "source": {
+    "file": "Scene1_06.py",
+    "note": "布置/目标速度/偏移/位置条件与固定延时自动提取；变道异步执行，TOR 为事件标记，不能视为原试次轨迹等价。"
+  },
+  "mode": "motion",
+  "dt": 0.05,
+  "locked_take": null
+}

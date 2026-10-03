@@ -1,0 +1,98 @@
+{
+  "actors": [
+    {
+      "acceleration": 2.5,
+      "behavior": "scripted",
+      "clips": [
+        {
+          "type": "follow",
+          "start": 0.0,
+          "duration": 25.0,
+          "target": "lead",
+          "reaction": 0.8,
+          "gap": 4.0,
+          "headway": 1.2,
+          "id": "clip_ego_0"
+        }
+      ],
+      "color": "#77d7bd",
+      "deceleration": 6.0,
+      "id": "ego",
+      "model": "vehicle.tesla.model3",
+      "name": "主车",
+      "offset": 0.0,
+      "role": "ego",
+      "route": [],
+      "snap": true,
+      "spawn_at_start": true,
+      "speed": 45.0,
+      "start_in_motion": true,
+      "x": 692.9434204101562,
+      "y": -637.0,
+      "yaw": 90.0,
+      "z": 8.988245010375977
+    },
+    {
+      "acceleration": 2.5,
+      "behavior": "scripted",
+      "clips": [
+        {
+          "type": "brake",
+          "start": 6.0,
+          "duration": 4.0,
+          "value": 0.8,
+          "id": "clip_lead_0"
+        },
+        {
+          "type": "speed",
+          "start": 10.0,
+          "duration": 3.0,
+          "value": 35.0,
+          "id": "clip_lead_1"
+        }
+      ],
+      "color": "#deb775",
+      "deceleration": 6.0,
+      "id": "lead",
+      "model": "vehicle.tesla.model3",
+      "name": "前车",
+      "offset": 0.0,
+      "role": "background",
+      "route": [],
+      "snap": true,
+      "spawn_at_start": true,
+      "speed": 40.0,
+      "start_in_motion": true,
+      "x": 692.9434204101562,
+      "y": -592.0,
+      "yaw": 90.0,
+      "z": 8.988245010375977
+    }
+  ],
+  "camera": {
+    "fov": 100.0,
+    "fps": 20.0,
+    "height": 720,
+    "width": 1280
+  },
+  "dt": 0.05,
+  "duration": 25.0,
+  "ego": "ego",
+  "events": [],
+  "id": "Following_Demo",
+  "locked_take": null,
+  "look": {
+    "preset": "clear",
+    "weather": {},
+    "camera": {}
+  },
+  "map": "package/Maps/map10/map10",
+  "mode": "motion",
+  "name": "时间轴示例 · 跟车与前车制动",
+  "seed": 42,
+  "version": 2,
+  "view": {
+    "x": 692.9434204101562,
+    "y": -567.0
+  }
+}

@@ -1,0 +1,320 @@
+{
+  "version": 2,
+  "id": "Scene2",
+  "name": "Scene2 · 原场景可编辑模板",
+  "map": "package/Maps/map10/map10",
+  "duration": 90.0,
+  "seed": 42,
+  "ego": "ego",
+  "actors": [
+    {
+      "id": "car1",
+      "name": "Car1",
+      "model": "vehicle.kawasaki.ninja",
+      "x": -994.75,
+      "y": -275.0,
+      "z": 0.25,
+      "yaw": -90.0,
+      "speed": 0.0,
+      "offset": 0.0,
+      "behavior": "scripted",
+      "start_in_motion": true,
+      "spawn_at_start": true,
+      "snap": true,
+      "color": "#d5dce1",
+      "route": [],
+      "acceleration": 2.5,
+      "deceleration": 6.0,
+      "role": "background",
+      "clips": []
+    },
+    {
+      "id": "car2",
+      "name": "Car2",
+      "model": "vehicle.audi.tt",
+      "x": -1040.75,
+      "y": -301.75,
+      "z": 0.25,
+      "yaw": 180.0,
+      "speed": 0.0,
+      "offset": 0.0,
+      "behavior": "parked",
+      "start_in_motion": true,
+      "spawn_at_start": true,
+      "snap": true,
+      "color": "#d5dce1",
+      "route": [],
+      "acceleration": 2.5,
+      "deceleration": 6.0,
+      "role": "background",
+      "clips": []
+    },
+    {
+      "id": "car2_2",
+      "name": "Car2_2",
+      "model": "vehicle.audi.tt",
+      "x": -1035.75,
+      "y": -305.25,
+      "z": 0.25,
+      "yaw": 180.0,
+      "speed": 0.0,
+      "offset": 0.0,
+      "behavior": "parked",
+      "start_in_motion": true,
+      "spawn_at_start": true,
+      "snap": true,
+      "color": "#d5dce1",
+      "route": [],
+      "acceleration": 2.5,
+      "deceleration": 6.0,
+      "role": "background",
+      "clips": []
+    },
+    {
+      "id": "car3",
+      "name": "Car3",
+      "model": "vehicle.audi.tt",
+      "x": -810.7501220703125,
+      "y": -305.25,
+      "z": 0.25,
+      "yaw": 180.0,
+      "speed": 50.0,
+      "offset": 0.0,
+      "behavior": "scripted",
+      "start_in_motion": true,
+      "spawn_at_start": true,
+      "snap": true,
+      "color": "#d5dce1",
+      "route": [],
+      "acceleration": 2.5,
+      "deceleration": 6.0,
+      "role": "background",
+      "clips": []
+    },
+    {
+      "id": "car4",
+      "name": "Car4",
+      "model": "vehicle.audi.tt",
+      "x": -890.7500610351562,
+      "y": -305.25,
+      "z": 0.25,
+      "yaw": 180.0,
+      "speed": 50.0,
+      "offset": 0.0,
+      "behavior": "scripted",
+      "start_in_motion": true,
+      "spawn_at_start": true,
+      "snap": true,
+      "color": "#d5dce1",
+      "route": [],
+      "acceleration": 2.5,
+      "deceleration": 6.0,
+      "role": "background",
+      "clips": []
+    },
+    {
+      "id": "ego",
+      "name": "主车",
+      "model": "vehicle.tesla.model3",
+      "x": -850.7500610351562,
+      "y": -305.25,
+      "z": 0.25,
+      "yaw": 180.0,
+      "speed": 50.01,
+      "offset": 0.0,
+      "behavior": "scripted",
+      "start_in_motion": true,
+      "spawn_at_start": true,
+      "snap": true,
+      "color": "#d5dce1",
+      "route": [],
+      "acceleration": 2.5,
+      "deceleration": 6.0,
+      "role": "ego",
+      "clips": []
+    }
+  ],
+  "events": [
+    {
+      "id": "event_1",
+      "name": "follow",
+      "trigger": {
+        "type": "time",
+        "value": 0.0
+      },
+      "action": {
+        "type": "follow",
+        "actor": "car3",
+        "target": "ego",
+        "reaction": 0.8,
+        "gap": 0.5
+      }
+    },
+    {
+      "id": "gate_1",
+      "name": "位置阶段",
+      "trigger": {
+        "type": "point",
+        "actor": "ego",
+        "x": -960.75,
+        "y": -301.75,
+        "op": "<=",
+        "value": 5.0
+      },
+      "action": {
+        "type": "marker",
+        "label": "gate_1"
+      }
+    },
+    {
+      "id": "event_2",
+      "name": "marker",
+      "trigger": {
+        "type": "after_event",
+        "event": "gate_1",
+        "value": 0.0
+      },
+      "action": {
+        "type": "marker",
+        "label": "TOR"
+      }
+    },
+    {
+      "id": "gate_3",
+      "name": "位置阶段",
+      "trigger": {
+        "type": "position",
+        "actor": "ego",
+        "axis": "x",
+        "op": "<=",
+        "value": -965.75
+      },
+      "action": {
+        "type": "marker",
+        "label": "gate_3"
+      }
+    },
+    {
+      "id": "event_3",
+      "name": "speed",
+      "trigger": {
+        "type": "after_event",
+        "event": "gate_3",
+        "value": 0.0
+      },
+      "action": {
+        "type": "speed",
+        "actor": "car1",
+        "value": 45.0
+      }
+    },
+    {
+      "id": "event_4",
+      "name": "speed",
+      "trigger": {
+        "type": "after_event",
+        "event": "gate_3",
+        "value": 0.0
+      },
+      "action": {
+        "type": "speed",
+        "actor": "car4",
+        "value": 25.0
+      }
+    },
+    {
+      "id": "gate_6",
+      "name": "位置阶段",
+      "trigger": {
+        "type": "position",
+        "actor": "ego",
+        "axis": "x",
+        "op": "<=",
+        "value": -995.75
+      },
+      "action": {
+        "type": "marker",
+        "label": "gate_6"
+      }
+    },
+    {
+      "id": "event_5",
+      "name": "lane_change",
+      "trigger": {
+        "type": "after_event",
+        "event": "gate_6",
+        "value": 0.0
+      },
+      "action": {
+        "type": "lane_change",
+        "actor": "car4",
+        "direction": "right",
+        "lanes": 1,
+        "distance": 20.0
+      }
+    },
+    {
+      "id": "event_6",
+      "name": "speed",
+      "trigger": {
+        "type": "after_event",
+        "event": "gate_6",
+        "value": 0.0
+      },
+      "action": {
+        "type": "speed",
+        "actor": "car4",
+        "value": 50.0
+      }
+    },
+    {
+      "id": "gate_9",
+      "name": "位置阶段",
+      "trigger": {
+        "type": "position",
+        "actor": "ego",
+        "axis": "x",
+        "op": "<=",
+        "value": -1070.75
+      },
+      "action": {
+        "type": "marker",
+        "label": "gate_9"
+      }
+    },
+    {
+      "id": "event_7",
+      "name": "finish",
+      "trigger": {
+        "type": "after_event",
+        "event": "gate_9",
+        "value": 0.0
+      },
+      "action": {
+        "type": "finish"
+      }
+    }
+  ],
+  "look": {
+    "preset": "original",
+    "weather": {},
+    "camera": {}
+  },
+  "camera": {
+    "width": 1280,
+    "height": 720,
+    "fps": 20.0,
+    "fov": 100.0
+  },
+  "view": {
+    "x": -850.7500610351562,
+    "y": -235.25
+  },
+  "source": {
+    "file": "Scene2.py",
+    "note": "布置/目标速度/偏移/位置条件与固定延时自动提取；变道异步执行，TOR 为事件标记，不能视为原试次轨迹等价。"
+  },
+  "mode": "motion",
+  "dt": 0.05,
+  "locked_take": null
+}

@@ -1,0 +1,28 @@
+const $=id=>document.getElementById(id);
+const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+export const clipNames={speed:'速度',brake:'制动',lane_change:'变道',follow:'跟车',lights:'灯光'};
+export class Sequencer{
+ constructor(callbacks){this.cb=callbacks;this.zoom=32;this.time=0;this.selected=null;this.plan=null;this.drag=null;
+  $('ruler').addEventListener('pointerdown',e=>{if(e.clientX-$('timeline-scroll').getBoundingClientRect().left<160)return;this.scrub(e);e.currentTarget.setPointerCapture(e.pointerId);this.scrubbing=true});
+  $('ruler').addEventListener('pointermove',e=>{if(this.scrubbing)this.scrub(e)});$('ruler').addEventListener('pointerup',()=>this.scrubbing=false);
+  $('zoom-in').onclick=()=>{this.zoom=Math.min(200,this.zoom*1.35);this.render()};$('zoom-out').onclick=()=>{this.zoom=Math.max(2,this.zoom/1.35);this.render()};$('zoom-fit').onclick=()=>this.fit();
+  document.querySelectorAll('[data-add-clip]').forEach(b=>b.onclick=()=>this.cb.addClip(b.dataset.addClip));
+  window.addEventListener('pointermove',e=>this.move(e));window.addEventListener('pointerup',e=>this.end(e));
+ }
+ fit(){const s=this.cb.scene();if(!s)return;this.zoom=Math.max(2,($('timeline-scroll').clientWidth-180)/s.duration);this.render()}
+ setTime(t,notify=false){const s=this.cb.scene();if(!s)return;this.time=Math.max(0,Math.min(s.duration,t));$('playhead').style.left=(160+this.time*this.zoom)+'px';$('time-current').textContent=String(Math.floor(this.time/60)).padStart(2,'0')+':'+(this.time%60).toFixed(1).padStart(4,'0');if(notify)this.cb.seek(this.time)}
+ scrub(e){const r=$('timeline-scroll').getBoundingClientRect(),x=e.clientX-r.left+$('timeline-scroll').scrollLeft-160;this.setTime(x/this.zoom,true)}
+ title(c){return c.type==='speed'?`${c.value} km/h`:c.type==='brake'?`制动 ${Math.round(c.value*100)}%`:c.type==='lane_change'?`${c.direction==='left'?'←':'→'} ${c.lanes} 车道`:c.type==='follow'?`跟随 ${this.cb.scene().actors.find(a=>a.id===c.target)?.name||c.target}`:'灯光'}
+ curve(a,width,height=25){const frames=this.plan?.tracks[a.id]?.frames;if(!frames?.length)return '';const max=Math.max(60,...frames.map(p=>p[5]));return `<svg class="track-speed" style="left:160px;width:${width}px" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none"><polyline fill="none" stroke="#9be8d0" stroke-width="1.4" points="${frames.filter((_,i)=>i%2===0).map(f=>`${f[0]*this.zoom},${height-2-f[5]/max*(height-4)}`).join(' ')}"/></svg>`}
+ render(){const s=this.cb.scene();if(!s)return;const locked=this.cb.locked(),width=Math.max(s.duration*this.zoom,$('timeline-scroll').clientWidth-160);$('timeline-inner').style.width=(160+width)+'px';$('timeline-inner').style.setProperty('--second',(this.zoom*(this.zoom<8?10:this.zoom<20?5:1))+'px');
+  const interval=this.zoom<8?10:this.zoom<20?5:this.zoom<50?2:1;let ticks='<div class="ruler-title">参与者 / 目标速度</div>';for(let t=0;t<=s.duration;t+=interval)ticks+=`<span class="tick" style="left:${160+t*this.zoom}px">${t}s</span>`;$('ruler').innerHTML=ticks;
+  $('tracks').innerHTML=s.actors.map(a=>`<div class="track-row ${a.id===this.cb.actorId()?'selected':''}" data-track="${escape(a.id)}">${this.curve(a,width)}<div class="track-name" data-select-actor="${escape(a.id)}"><b>${a.id===s.ego?'◆ ':''}${escape(a.name)}</b><small>${a.speed} km/h · ${(a.clips||[]).length} 个片段</small></div>${(a.clips||[]).map(c=>`<div role="button" tabindex="0" aria-label="${escape(a.name+' '+clipNames[c.type]+' '+c.start+'秒')}" class="clip ${c.type} ${c.id===this.selected?'selected':''} ${c.enabled===false?'disabled':''}" data-clip="${escape(c.id)}" style="left:${160+c.start*this.zoom}px;width:${Math.max(8,c.duration*this.zoom)}px" title="${escape(this.title(c))} / ${c.start.toFixed(1)}–${(c.start+c.duration).toFixed(1)}s"><span>${escape(this.title(c))}</span>${locked?'':'<i class="resize"></i>'}</div>`).join('')}</div>`).join('');
+  document.querySelectorAll('[data-select-actor]').forEach(el=>el.onclick=()=>this.cb.selectActor(el.dataset.selectActor));
+  document.querySelectorAll('[data-clip]').forEach(el=>{el.onpointerdown=e=>this.begin(e,el);el.onkeydown=e=>{if(e.key==='Enter')this.choose(el)}});
+  document.querySelectorAll('[data-add-clip]').forEach(b=>b.disabled=locked);this.setTime(this.time);
+ }
+ choose(el){const aid=el.closest('[data-track]').dataset.track;this.selected=el.dataset.clip;this.cb.selectClip(aid,this.selected);return this.cb.scene().actors.find(a=>a.id===aid).clips.find(c=>c.id===this.selected)}
+ begin(e,el){if(e.button!==0)return;e.preventDefault();const c=this.choose(el);if(this.cb.locked())return;this.cb.beforeEdit();this.drag={clip:c,element:el,x:e.clientX,start:c.start,duration:c.duration,resize:e.target.classList.contains('resize'),moved:false};el.setPointerCapture(e.pointerId)}
+ move(e){const d=this.drag;if(!d)return;const snap=+$('time-snap').value,dx=(e.clientX-d.x)/this.zoom;d.moved ||= Math.abs(e.clientX-d.x)>2;if(d.resize)d.clip.duration=Math.max(.1,Math.min(this.cb.scene().duration-d.start,Math.round((d.duration+dx)/snap)*snap));else d.clip.start=Math.max(0,Math.min(this.cb.scene().duration-d.duration,Math.round((d.start+dx)/snap)*snap));d.element.style.left=(160+d.clip.start*this.zoom)+'px';d.element.style.width=Math.max(8,d.clip.duration*this.zoom)+'px';this.cb.dragInfo(`${clipNames[d.clip.type]} ${d.clip.start.toFixed(1)} → ${(d.clip.start+d.clip.duration).toFixed(1)} s`)}
+ async end(){const d=this.drag;if(!d)return;this.drag=null;if(d.moved){try{await this.cb.validate()}catch(e){d.clip.start=d.start;d.clip.duration=d.duration;this.cb.error(e.message)}}this.render();this.cb.afterEdit()}
+}
