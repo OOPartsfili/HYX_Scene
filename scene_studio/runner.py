@@ -85,12 +85,17 @@ class Driver(Ramp_Vice_Control):
             steer,throttle,brake=self.manual
             self.vice_car.apply_control(carla.VehicleControl(steer=steer,throttle=0 if brake else throttle,brake=brake))
             return
-        if self.brake_override is not None:
-            self.vice_car.apply_control(carla.VehicleControl(throttle=0,brake=self.brake_override))
-            self._command_speed=speed_mps(self.vice_car);return
         self.actual_offset+=max(-.5*dt,min(.5*dt,self.offset-self.actual_offset))
         wp=self._target_waypoint(now)
         if wp is None:self.vice_car.apply_control(carla.VehicleControl(brake=1));return
+        if self.brake_override is not None:
+            # Braking changes longitudinal control only. Keep tracking the
+            # route while slowing in a bend, including a zero-brake coast.
+            self._command_speed=speed_mps(self.vice_car)
+            self._pid.set_timestep(dt)
+            control=self._pid.run_step(self._command_speed*3.6,wp)
+            control.throttle=0;control.brake=self.brake_override
+            self.vice_car.apply_control(control);return
         desired,emergency=self._desired_speed(now)
         self._command_speed=ramp_speed(self._command_speed,desired,dt,self.spec['acceleration'],self.spec['deceleration'])
         self._pid.set_timestep(dt)

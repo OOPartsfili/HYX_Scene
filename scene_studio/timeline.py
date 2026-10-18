@@ -68,9 +68,26 @@ def motion_at(actor,t,lane_width=3.5):
 
 def motion_document(scene):
     """Fields that may affect trajectories. Appearance/camera/name are deliberately excluded."""
+    events=scene.get('events',[])
+    by_id={e['id']:e for e in events}
+    visual={'weather','lights','marker'}
+    relevant={e['id'] for e in events if e['action']['type'] not in visual}
+    pending=list(relevant)
+    while pending:
+        trigger=by_id[pending.pop()]['trigger']
+        parent=trigger.get('event') if trigger['type']=='after_event' else None
+        if parent in by_id and parent not in relevant:
+            relevant.add(parent);pending.append(parent)
+    motion_events=[]
+    for event in events:
+        if event['id'] not in relevant:continue
+        if event['action']['type'] in visual:
+            # Its appearance does not affect motion, but its firing time does.
+            event=copy.deepcopy(event);event['action']={'type':'marker'}
+        motion_events.append(event)
     return {'map':scene['map'],'duration':scene['duration'],'dt':scene.get('dt',.05),'ego':scene['ego'],
             'actors':[{k:v for k,v in a.items() if k not in ('name','color')} for a in scene['actors']],
-            'events':[e for e in scene.get('events',[]) if e['action']['type'] not in ('weather','lights','marker')]}
+            'events':motion_events}
 
 def motion_hash(scene):return hashlib.sha256(json.dumps(motion_document(scene),sort_keys=True,separators=(',',':'),allow_nan=False).encode()).hexdigest()
 

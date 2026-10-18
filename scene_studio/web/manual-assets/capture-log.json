@@ -1,0 +1,82 @@
+{
+  "source": "Real UI captured with cua_repl",
+  "note": "Screenshots are unmodified. Numbered highlights are rendered in the handbook as HTML overlays.",
+  "captures": [
+    {
+      "file": "01-overview.png",
+      "note": "Initial actual editor overview"
+    },
+    {
+      "file": "02-file-copy.png",
+      "note": "选择文件菜单，另存为新场景",
+      "url": "http://127.0.0.1:8879/",
+      "capturedAt": "2026-10-10T10:25:12.487Z"
+    },
+    {
+      "file": "03-speed-clip.png",
+      "note": "点击主车绿色速度片段，在右侧填写开始1秒、持续4秒、目标40km/h",
+      "url": "http://127.0.0.1:8879/",
+      "capturedAt": "2026-10-10T10:25:37.217Z"
+    },
+    {
+      "file": "04-actor-settings.png",
+      "note": "选中主车，在右侧设置速度和加减速度，右侧面板可独立滚动",
+      "url": "http://127.0.0.1:8879/",
+      "capturedAt": "2026-10-10T10:25:37.817Z"
+    },
+    {
+      "file": "05-route-point.png",
+      "note": "进入绘制路线模式后点击道路，右侧出现路线点X/Y；此点仅演示，随后撤销",
+      "url": "http://127.0.0.1:8879/",
+      "capturedAt": "2026-10-10T10:26:14.796Z"
+    },
+    {
+      "file": "06-live-preview.png",
+      "note": "启动实机预览，真实相机出现；结束预览后再进行物理录制",
+      "url": "http://127.0.0.1:8879/",
+      "capturedAt": "2026-10-10T10:26:32.003Z"
+    },
+    {
+      "file": "07-running-paused.png",
+      "note": "真实物理录制已经启动，按暂停后停住试次时间",
+      "url": "http://127.0.0.1:8879/",
+      "capturedAt": "2026-10-10T10:27:02.281Z"
+    },
+    {
+      "file": "08-manual-control.png",
+      "note": "暂停时按M显示KEYBOARD键盘控制权；继续后WASD驾驶，R返回自动",
+      "url": "http://127.0.0.1:8879/",
+      "capturedAt": "2026-10-10T10:27:14.913Z"
+    },
+    {
+      "file": "09-input-settings.png",
+      "note": "输入设置对话框，当前没有检测到手柄或方向盘",
+      "url": "http://127.0.0.1:8879/",
+      "capturedAt": "2026-10-10T10:27:22.770Z"
+    },
+    {
+      "file": "10-run-results.png",
+      "note": "最近运行中显示本次图文练习，finished与25.0秒表示已结束，可下载轨迹、事件和配置",
+      "url": "http://127.0.0.1:8879/",
+      "capturedAt": "2026-10-10T10:30:28.947Z"
+    },
+    {
+      "file": "11-take-library.png",
+      "note": "轨迹库最新一项是图文练习25秒501帧，点同一行的锁定此轨迹",
+      "url": "http://127.0.0.1:8879/",
+      "capturedAt": "2026-10-10T10:30:30.857Z"
+    },
+    {
+      "file": "12-environment-settings.png",
+      "note": "锁定后选低角度日光并保存，运动锁定；按钮变为重放并录制",
+      "url": "http://127.0.0.1:8879/",
+      "capturedAt": "2026-10-10T10:32:40.867Z"
+    },
+    {
+      "file": "13-environment-preview.png",
+      "note": "低角度日光的固定轨迹实机预览，截图后停止并恢复世界设置",
+      "url": "http://127.0.0.1:8879/",
+      "capturedAt": "2026-10-10T10:34:16.482Z"
+    }
+  ]
+}

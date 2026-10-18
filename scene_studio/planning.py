@@ -5,14 +5,23 @@ from agents.navigation.global_route_planner import GlobalRoutePlanner
 from scene_studio.routing import MapDAO
 from scene_studio.timeline import motion_at,pose_on_path,motion_hash
 
+PLAN_VERSION=2
+
+def plan_is_current(plan,scene):
+    return isinstance(plan,dict) and plan.get('planner_version')==PLAN_VERSION and plan.get('motion_hash')==motion_hash(scene)
+
 class Planner:
     def __init__(self,wmap):self.map=wmap;self.router=None
-    def path(self,actor,duration):
+    def path(self,actor,duration,max_speed=None):
         start=carla.Location(x=actor['x'],y=actor['y'],z=actor['z'])
         wp=self.map.get_waypoint(start);width=wp.lane_width if wp else 3.5
+        speed=max([actor['speed'],max_speed or 0]+[c.get('value',0) for c in actor.get('clips',[]) if c['type']=='speed' and c.get('enabled',True)])
         if actor['model'].startswith(('walker.','static.')) or actor['behavior']=='parked':
             points=[(actor['x'],actor['y'],actor['z'],actor['yaw'])]
             points.extend((p['x'],p['y'],p['z'],actor['yaw']) for p in actor.get('route',[]))
+            if actor['model'].startswith('walker.') and actor['behavior']!='parked' and not actor.get('route'):
+                length=max(.01,speed/3.6*duration+1);rad=math.radians(actor['yaw'])
+                points.append((actor['x']+length*math.cos(rad),actor['y']+length*math.sin(rad),actor['z'],actor['yaw']))
         else:
             if not wp:raise ValueError(actor['name']+' 没有可驾驶路线')
             waypoints=[wp]
@@ -25,7 +34,6 @@ class Planner:
                     if not segment:raise ValueError('路线点不连通')
                     waypoints.extend(v for v,_ in segment);start=end
             else:
-                speed=max([actor['speed']]+[c.get('value',0) for c in actor.get('clips',[]) if c['type']=='speed'])
                 maxdist=max(80,speed/3.6*duration+25);distance=0;seen={wp.id}
                 while distance<maxdist and len(waypoints)<50000:
                     choices=[p for p in wp.next(2) if p.id not in seen]
@@ -44,9 +52,10 @@ class Planner:
         if len(path)==1:path.append([.01,*path[0][1:]])
         return path,width
     def compile(self,scene):
-        tracks={};warnings=[];dt=max(.1,scene['duration']/1500)
+        tracks={};warnings=['布置预演使用简化运动模型，不计算车辆动力学、碰撞和交通规则；研究指标请使用实际运行的轨迹与传感器记录。'];dt=max(.1,scene['duration']/1500)
         for actor in scene['actors']:
-            path,width=self.path(actor,scene['duration']);frames=[];distance=0;speed=actor['speed'] if actor.get('start_in_motion') else 0;previous=0
+            event_speed=max([0]+[e['action']['value'] for e in scene.get('events',[]) if e.get('enabled',True) and e['action'].get('actor')==actor['id'] and e['action']['type']=='speed'])
+            path,width=self.path(actor,scene['duration'],event_speed);frames=[];distance=0;speed=actor['speed'] if actor.get('start_in_motion') and actor['behavior']!='parked' else 0;previous=0
             for i in range(math.ceil(scene['duration']/dt)+1):
                 t=min(i*dt,scene['duration']);target=motion_at(actor,t,width)
                 target_speed=0 if actor['behavior']=='parked' else target['speed']
@@ -54,11 +63,12 @@ class Planner:
                 acceleration=actor['acceleration'] if target_speed>speed else actor['deceleration']
                 speed+=max(-acceleration*3.6*(t-previous),min(acceleration*3.6*(t-previous),target_speed-speed))
                 distance+=max(0,speed)/3.6*(t-previous);previous=t
-                pose=pose_on_path(path,distance,target['offset'])
+                pose=pose_on_path(path,distance,0 if actor['behavior']=='parked' else target['offset'])
                 if distance>=path[-1][0]:speed=0
                 frames.append([round(t,4),pose['x'],pose['y'],pose['z'],pose['yaw'],speed])
             if any(c['type']=='follow' for c in actor.get('clips',[])):warnings.append(actor['name']+'：布置预演显示速度上限，实际跟车速度随前车状态计算；录制后可精确重放')
+            if not actor.get('spawn_at_start',True):warnings.append(actor['name']+'：延迟生成参与者的预演轨迹仅表示路线，实际出现时刻由生成事件决定')
             if any(e.get('enabled',True) and e['action'].get('actor')==actor['id'] and e['action']['type'] in ('speed','brake','lane_change','follow','route','offset','destroy','spawn') for e in scene.get('events',[])):
                 warnings.append(actor['name']+'：条件事件依赖实际运行状态，简化预演不计算这些事件，请运行录制后检查实际轨迹')
             tracks[actor['id']]={'path':path,'lane_width':width,'frames':frames}
-        return {'motion_hash':motion_hash(scene),'duration':scene['duration'],'tracks':tracks,'warnings':warnings}
+        return {'planner_version':PLAN_VERSION,'motion_hash':motion_hash(scene),'duration':scene['duration'],'tracks':tracks,'warnings':warnings}

@@ -26,6 +26,16 @@ def number(value, low, high, label):
     return v
 
 
+def object_value(value,label):
+    if not isinstance(value,dict):raise ValueError(label+' 必须为对象')
+    return value
+
+
+def boolean(value,label):
+    if not isinstance(value,bool):raise ValueError(label+' 需要布尔值')
+    return value
+
+
 def validate(data):
     if not isinstance(data,dict):raise ValueError('场景必须为对象')
     s=copy.deepcopy(data)
@@ -33,15 +43,16 @@ def validate(data):
     s['version']=2
     s.setdefault('mode','motion')
     if s['mode'] not in ('motion','environment'):raise ValueError('场景模式无效')
-    s['dt']=number(s.get('dt',.05),.025,.1,'仿真步长')
-    if s['dt'] not in (.025,.05,.1):raise ValueError('步长需为 0.025 / 0.05 / 0.1 秒')
+    s['dt']=number(s.get('dt',.05),1/60,.1,'仿真步长')
+    if s['dt'] not in (1/60,.025,.05,.1):raise ValueError('步长需为 1/60 / 0.025 / 0.05 / 0.1 秒')
     s.setdefault('locked_take',None)
     if s['mode']=='environment' and not re.fullmatch(r'[A-Za-z0-9_-]{1,90}',str(s['locked_take'] or '')):raise ValueError('环境模式需要已录制的基准轨迹')
     s.setdefault('id','scene_new')
-    if not re.fullmatch(r'[A-Za-z0-9_-]{1,80}',s['id']):raise ValueError('场景 ID 只允许字母、数字、下划线和连字符')
+    if not isinstance(s['id'],str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,80}',s['id']):raise ValueError('场景 ID 只允许字母、数字、下划线和连字符')
     s['name']=str(s.get('name','未命名场景'))[:120]
     s['map']=str(s.get('map','package/Maps/map10/map10'))
     s['duration']=number(s.get('duration',40),1,3600,'时长')
+    if not math.isclose(s['duration']/s['dt'],round(s['duration']/s['dt']),abs_tol=1e-7,rel_tol=0):raise ValueError('场景时长必须为仿真步长的整数倍，保证记录时间与物理时间一致')
     s['seed']=int(number(s.get('seed',42),0,2147483647,'随机种子'))
     s.setdefault('view',{'x':693,'y':-537,'scale':1})
     actors=s.setdefault('actors',[]);events=s.setdefault('events',[])
@@ -49,18 +60,21 @@ def validate(data):
     if not isinstance(events,list) or len(events)>200:raise ValueError('事件不能超过 200 个')
     ids=set()
     for a in actors:
+        object_value(a,'参与者')
         aid=a.get('id','')
-        if not re.fullmatch(r'[A-Za-z0-9_-]{1,60}',aid) or aid in ids:raise ValueError('参与者 ID 重复或不合法')
+        if not isinstance(aid,str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,60}',aid) or aid in ids:raise ValueError('参与者 ID 重复或不合法')
         ids.add(aid)
         a['name']=str(a.get('name',aid))[:80]
-        if a.get('color') and not re.fullmatch(r'#[0-9a-fA-F]{6}',a['color']):raise ValueError('颜色需要 #RRGGBB')
-        if not str(a.get('model','')).startswith(('vehicle.','walker.pedestrian.','static.prop.')):raise ValueError('参与者模型类型不支持')
+        if a.get('color') and (not isinstance(a['color'],str) or not re.fullmatch(r'#[0-9a-fA-F]{6}',a['color'])):raise ValueError('颜色需要 #RRGGBB')
+        if not isinstance(a.get('model'),str) or not a['model'].startswith(('vehicle.','walker.pedestrian.','static.prop.')):raise ValueError('参与者模型类型不支持')
         for key in ('x','y','z','yaw'):a[key]=number(a.get(key,0),-100000,100000,key)
         a['speed']=number(a.get('speed',0),0,180,'车速')
         a['acceleration']=number(a.get('acceleration',2.5),.1,12,'加速度')
         a['deceleration']=number(a.get('deceleration',6),.1,15,'减速度')
         a['offset']=number(a.get('offset',0),-10,10,'横向偏移')
         a.setdefault('behavior','scripted');a.setdefault('start_in_motion',True);a.setdefault('spawn_at_start',True)
+        for flag in ('start_in_motion','spawn_at_start','snap'):
+            if flag in a:boolean(a[flag],flag)
         if a['behavior'] not in ('scripted','traffic','parked','walker'):raise ValueError('行为类型不支持')
         if a['model'].startswith('vehicle.') and a['behavior']=='walker':raise ValueError('车辆不能使用行人行为')
         if a['model'].startswith('walker.') and a['behavior'] not in ('walker','parked'):raise ValueError('行人请选择行人运动或静止行为')
@@ -68,7 +82,10 @@ def validate(data):
         route=a.setdefault('route',[])
         if not isinstance(route,list) or len(route)>200:raise ValueError('路线点过多')
         for p in route:
+            object_value(p,'路线点')
             for k in ('x','y','z'):p[k]=number(p.get(k,0),-100000,100000,'路线 '+k)
+    vehicles={a['id'] for a in actors if a['model'].startswith('vehicle.')}
+    mobile={a['id'] for a in actors if a['model'].startswith(('vehicle.','walker.'))}
     s.setdefault('ego',actors[0]['id'])
     if s['ego'] not in ids:raise ValueError('主视角参与者不存在')
     if not next(a for a in actors if a['id']==s['ego'])['model'].startswith('vehicle.'):
@@ -81,8 +98,9 @@ def validate(data):
         if not isinstance(clips,list) or len(clips)>200:raise ValueError('每个参与者最多 200 个时间轴片段')
         channels={}
         for clip in clips:
+            object_value(clip,'时间轴片段')
             cid=clip.get('id','')
-            if not re.fullmatch(r'[A-Za-z0-9_-]{1,80}',cid) or cid in clip_ids:raise ValueError('时间轴片段 ID 重复或不合法')
+            if not isinstance(cid,str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,80}',cid) or cid in clip_ids:raise ValueError('时间轴片段 ID 重复或不合法')
             clip_ids.add(cid)
             if clip.get('type') not in CLIP_TYPES:raise ValueError('时间轴片段类型无效')
             clip['start']=number(clip.get('start',0),0,s['duration'],'片段开始时间')
@@ -103,22 +121,28 @@ def validate(data):
                 if clip.get('direction','left') not in ('left','right'):raise ValueError('变道方向无效')
                 clip['lanes']=int(number(clip.get('lanes',1),1,3,'变道车道数'))
             if kind=='follow':
-                if clip.get('target') not in ids or clip['target']==actor['id']:raise ValueError('跟车片段需要另一辆目标车')
+                if clip.get('target') not in vehicles or clip['target']==actor['id']:raise ValueError('跟车片段需要另一辆目标车')
                 clip['reaction']=number(clip.get('reaction',.8),0,5,'跟车反应时间')
                 clip['gap']=number(clip.get('gap',4),0,100,'最小间距')
                 clip['headway']=number(clip.get('headway',1.2),.1,5,'跟车时距')
             if kind in ('brake','lane_change','follow','lights') and not actor['model'].startswith('vehicle.'):raise ValueError('该片段只支持车辆')
+            if kind=='speed' and actor['id'] not in mobile:raise ValueError('速度片段只支持车辆或行人')
     event_ids=set()
     for e in events:
+        object_value(e,'事件')
         eid=e.get('id','')
-        if not re.fullmatch(r'[A-Za-z0-9_-]{1,60}',eid) or eid in event_ids:raise ValueError('事件 ID 重复或不合法')
+        if not isinstance(eid,str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,60}',eid) or eid in event_ids:raise ValueError('事件 ID 重复或不合法')
         event_ids.add(eid)
+        if 'enabled' in e:boolean(e['enabled'],'事件启用值')
     for e in events:
         t=e.setdefault('trigger',{'type':'time','value':0});a=e.setdefault('action',{'type':'marker'})
+        object_value(t,'触发器');object_value(a,'事件动作')
         if t.get('type') not in TRIGGERS or a.get('type') not in ACTIONS:raise ValueError('不支持的触发器或动作')
         for ref in [t.get('actor'),t.get('target'),a.get('actor'),a.get('target')]:
             if ref and ref not in ids:raise ValueError('事件引用不存在的参与者：'+str(ref))
         if a['type'] not in ('weather','marker','finish') and a.get('actor') not in ids:raise ValueError('动作需要指定参与者')
+        if a['type'] in ('brake','offset','lane_change','follow','route','lights') and a.get('actor') not in vehicles:raise ValueError('制动、变道、跟车、路线和车灯动作只支持车辆')
+        if a['type']=='speed' and a.get('actor') not in mobile:raise ValueError('速度动作只支持车辆或行人')
         if a['type']=='destroy' and a.get('actor')==s['ego']:raise ValueError('运行中不能销毁主车；结束场景请使用结束动作')
         if t['type']!='time' and t['type']!='after_event' and t.get('actor') not in ids:raise ValueError('触发器需要指定参与者')
         if t['type']=='distance' and t.get('target') not in ids:raise ValueError('距离条件需要目标参与者')
@@ -136,13 +160,21 @@ def validate(data):
             if a.get('direction','left') not in ('left','right'):raise ValueError('变道方向无效')
             a['lanes']=int(number(a.get('lanes',1),1,3,'变道车道数'))
             a['distance']=number(a.get('distance',20),3,150,'变道距离')
-        if a['type']=='follow' and a.get('target') not in ids:raise ValueError('跟车需要目标车辆')
+        if a['type']=='follow' and a.get('target') not in vehicles:raise ValueError('跟车需要目标车辆')
         if a['type']=='follow':
             if a['target']==a['actor']:raise ValueError('不能跟随自己')
             a['reaction']=number(a.get('reaction',.8),0,5,'跟车反应时间')
             a['gap']=number(a.get('gap',3),0,100,'跟车最小距离')
         if a['type']=='lights':a['value']=int(number(a.get('value',3),0,2047,'车灯状态'))
         if a['type']=='weather' and a.get('preset') not in LOOKS:raise ValueError('画面预设不存在')
+    # The runtime evaluates timelines each tick, so an event on the same channel
+    # would be silently overwritten. Require one authoring method per channel.
+    channel_for={'speed':'纵向速度 / 制动','brake':'纵向速度 / 制动','lane_change':'横向运动','offset':'横向运动','follow':'跟车','lights':'车灯'}
+    clip_channels={a['id']:{channel_for[c['type']] for c in a['clips'] if c.get('enabled',True)} for a in actors}
+    for event in events:
+        action=event['action'];channel=channel_for.get(action['type'])
+        if event.get('enabled',True) and channel and channel in clip_channels.get(action.get('actor'),set()):
+            raise ValueError(f'参与者 {action["actor"]} 的{channel}同时使用了事件和时间轴片段；该通道请选择一种编排方式，独立通道可以组合')
     # Reject cyclic event dependencies, which would otherwise wait forever.
     edges={e['id']:e['trigger'].get('event') for e in events if e['trigger']['type']=='after_event'}
     for eid in edges:
@@ -151,12 +183,14 @@ def validate(data):
             if cur in seen:raise ValueError('事件之间存在循环依赖')
             seen.add(cur);cur=edges[cur]
     look=s.setdefault('look',{'preset':'original','weather':{},'camera':{}})
+    object_value(look,'画面参数')
     if look.get('preset','original') not in LOOKS:raise ValueError('画面预设不存在')
     for group,limits in [('weather',WEATHER_LIMITS),('camera',CAMERA_LIMITS)]:
-        for key,val in look.setdefault(group,{}).items():
+        for key,val in object_value(look.setdefault(group,{}),'画面 '+group).items():
             if key not in limits:raise ValueError('不支持的画面参数 '+key)
             look[group][key]=number(val,*limits[key],key)
     camera=s.setdefault('camera',{})
+    object_value(camera,'相机参数')
     camera['width']=int(number(camera.get('width',1280),320,3840,'相机宽度'))
     camera['height']=int(number(camera.get('height',720),180,2160,'相机高度'))
     camera['fov']=number(camera.get('fov',100),30,160,'视场角')

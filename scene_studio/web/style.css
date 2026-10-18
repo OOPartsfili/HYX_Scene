@@ -8,3 +8,4 @@
 @media(max-width:950px){body{min-width:820px;overflow:auto}header{gap:8px}.brand small{display:none}.workspace{grid-template-columns:155px minmax(370px,1fr) 240px;height:calc(100vh - 130px);min-height:570px}.inspector{display:flex;grid-column:3;grid-row:1;gap:0}.tabs{grid-column:auto}.log{grid-column:auto}.workspace main{height:auto}.badge{display:none}.transport{gap:5px}.sequence-toolbar b{display:none}.timeline-help>span:last-child{display:none}.header-actions a{font-size:9px}.preview{width:175px}.projectbar{padding:5px 8px}.projectbar #scene-select{width:175px}}
 
 .track-row{height:99px}.clip.lane_change{top:37px;height:24px}.clip.follow,.clip.lane_change~.clip.follow{top:64px;height:24px}.clip.lights{top:88px;height:10px}
+input[aria-invalid="true"]{border-color:#df7e82;box-shadow:0 0 0 1px #df7e8266}

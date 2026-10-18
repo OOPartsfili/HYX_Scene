@@ -1,5 +1,5 @@
 """Authoritative live tests: record/replay pose equality and manual arbitration."""
-import copy,json,math,time
+import copy,csv,json,math,time
 from pathlib import Path
 import requests
 import carla
@@ -31,6 +31,24 @@ def equality(a,b,skip=None):
             err=max(abs(p[k]-q[k]) for k in ('x','y','z','yaw','pitch','roll','speed'));maximum=max(maximum,err)
     assert maximum<.0002,maximum
     return maximum
+def camera_alignment(rid,require_second_two=True):
+    folder=ROOT/'studio_data/runs'/rid
+    events=json.loads((folder/'events.json').read_text(encoding='utf-8'))
+    samples=events.get('camera_samples',[])
+    assert samples,'缺少带帧号与时间的实测截图记录'
+    with (folder/'telemetry.csv').open(encoding='utf-8',newline='') as stream:
+        frames={int(row['frame']):float(row['time']) for row in csv.DictReader(stream)}
+    if require_second_two:assert any(2<=s['time']<3 for s in samples),'缺少第2秒的实际相机采样'
+    previous=-1
+    for sample in samples:
+        assert sample['frame']>previous,sample
+        previous=sample['frame']
+        assert sample['frame'] in frames,('截图帧不在轨迹遥测中',sample)
+        assert abs(frames[sample['frame']]-sample['time'])<1e-6,('截图与轨迹时间错位',sample)
+        assert sample['file']==f"shot_{round(sample['time']*1000):07d}.jpg",sample
+        picture=folder/sample['file']
+        assert picture.is_file() and picture.stat().st_size>0,sample
+    return len(samples)
 def main():
     c=carla.Client('127.0.0.1',2000);c.set_timeout(10);w=c.get_world();before={a.id for a in w.get_actors()};weather=str(w.get_weather());original_settings=w.get_settings()
     scene=api('scenes/Scene1_01');ego=next(a for a in scene['actors'] if a['id']=='ego');ego.update(speed=28,offset=0,route=[],clips=[])
@@ -44,9 +62,9 @@ def main():
     bad=copy.deepcopy(variant);bad['actors'][0]['speed']+=1
     assert requests.post(U+'start',json={'scene':bad}).status_code==400
     replay=api('start',{'scene':variant})['run_id'];print('replay',replay,flush=True);finish();error=equality(base,rows(replay));print('exact replay max error',error,flush=True)
-    # At least one second-aligned image must exist in both runs.
-    assert (ROOT/'studio_data/runs'/baseline/'shot_0002000.jpg').exists()
-    assert (ROOT/'studio_data/runs'/replay/'shot_0002000.jpg').exists()
+    # Sensor phase need not hit exactly 2.000 s; prove the actual sensor frame
+    # and timestamp match the recorded trajectory instead of guessing a name.
+    baseline_images=camera_alignment(baseline);replay_images=camera_alignment(replay)
     manual=api('start',{'scene':variant})['run_id'];wait(lambda s:s['state']=='running' and s['elapsed']>=1)
     api('command',{'type':'takeover','owner':'keyboard'});s=wait(lambda s:s.get('control',{}).get('owner')=='keyboard');epoch=s['control']['epoch'];seq=0;checked=0
     while s['elapsed']<6.2:
@@ -63,6 +81,6 @@ def main():
     after={a.id for a in w.get_actors()};assert after==before,(after,before)
     assert str(w.get_weather())==weather
     assert w.get_settings().synchronous_mode==original_settings.synchronous_mode
-    result={'baseline':baseline,'golden_replay':replay,'manual_replay':manual,'frames_compared':len(base),'pose_speed_max_error':error,'background_max_error_during_manual':bg_error,'manual_samples_during_timeline_clips':checked,'watchdog_verified':True,'stale_input_rejected':True,'world_restored':True}
+    result={'baseline':baseline,'golden_replay':replay,'manual_replay':manual,'frames_compared':len(base),'pose_speed_max_error':error,'background_max_error_during_manual':bg_error,'manual_samples_during_timeline_clips':checked,'baseline_aligned_images':baseline_images,'replay_aligned_images':replay_images,'watchdog_verified':True,'stale_input_rejected':True,'world_restored':True}
     (OUT/'runtime_acceptance.json').write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf-8');print('V2 LIVE PASS',result,flush=True)
 if __name__=='__main__':main()

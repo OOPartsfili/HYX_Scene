@@ -1,8 +1,811 @@
-<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>HYX Scene Studio 使用说明</title><style>*{box-sizing:border-box}body{margin:0;background:#eef3f4;color:#203742;font:16px/1.85 "Microsoft YaHei",sans-serif}main{max-width:1100px;margin:auto;padding:35px 28px 80px}h1{font-size:40px;line-height:1.3}h2{font-size:25px;margin-top:0}section{padding:28px;background:white;border:1px solid #d7e2e6;border-radius:12px;margin:22px 0}a{color:#087b69}code{background:#eaf1f3;padding:2px 5px;border-radius:4px}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#17313d;color:#d4f1eb;padding:20px;border-radius:8px;font:13px/1.8 Consolas,monospace}.tag{font-size:12px;letter-spacing:2px;color:#178570}.flow{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.flow div{padding:18px;background:#edf6f3;border:1px solid #c8e0d7;border-radius:8px}.flow b{display:block;color:#0a7e68}.note{border-left:4px solid #cfaa4c;background:#fff7e5;padding:14px 18px}table{border-collapse:collapse;width:100%}th,td{padding:10px;text-align:left;vertical-align:top;border-bottom:1px solid #d5e2e6}small{color:#627d8b}li{margin:8px 0}kbd{font:13px Consolas,monospace;border:1px solid #b9cbd2;border-radius:4px;padding:2px 6px;background:#f3f6f7}.toc{display:flex;gap:15px;flex-wrap:wrap}@media(max-width:700px){.flow{grid-template-columns:1fr}main{padding:22px 15px}h1{font-size:29px}section{padding:20px}}</style><main><div class="tag">HYX SCENE STUDIO / 使用说明 / V2</div><h1>从运动编排，到固定轨迹的环境对照。</h1><p>编辑器通过 CARLA Python API 操作你已经启动的地图。左侧选择参与者与行为预设，中间布置车辆与路线，右侧编辑属性，底部按秒编排多车动作。</p><nav class="toc"><a href="#start">启动</a><a href="#motion">运动编排</a><a href="#environment">环境对照</a><a href="#manual">手动接管</a><a href="#files">文件与记录</a><a href="#limits">边界与排错</a><a href="/">返回编辑器 ↗</a></nav>
-<section id="start"><h2>1. 启动</h2><ol><li>启动 CARLA / UE 编辑器，打开 <b>map10</b>，点击 Play。API 默认地址为 <code>127.0.0.1:2000</code>。</li><li>在项目根目录运行 <code>Start-SceneStudio.cmd</code>，保持服务窗口打开。也可执行：<pre>python -m pip install -r requirements-studio.txt
-python -m scene_studio.server</pre></li><li>浏览器访问 <a href="http://127.0.0.1:8877/">http://127.0.0.1:8877/</a>。标题栏应显示当前地图名称。</li><li>首次使用可选“时间轴示例 · 加速与变道”或保留的 Scene1_01 等条件事件模板。服务器会从随代码附带的模板初始化缺失场景，不覆盖已有场景。</li></ol><p class="note">建议 Python 3.10、CARLA 0.9.15。编辑器不会自动切换地图。当前项目的 map10 为自定义地图，地图资产不包含在代码仓库中。运行时由本编辑器统一推进固定步长仿真，请停止其他正在调用 world.tick 的客户端。</p></section>
-<section id="motion"><h2>2. 运动编排：路线、速度与多车行为</h2><div class="flow"><div><b>01 布置</b>选择车型、位置与主车，绘制道路路线。</div><div><b>02 编排</b>应用行为预设，在时间轴上调整动作与目标速度。</div><div><b>03 录制</b>实机运行，保存实际位置、姿态、速度与输入控制。</div></div><ol><li>选择顶部“运动编排”。左侧点选车辆，使用中间的移动/旋转控件；“车道吸附”会将初始位置放到最近道路上。按 F 聚焦。</li><li>右侧设置初始速度、加减速度和初态。“启动即具有目标速度”是初始赋速，之后通过物理油门与刹车控制。未勾选则从静止开始。</li><li>点“路线”，依次在道路上点击路线点；右侧可修改点坐标或删除。车辆沿地图道路网络连接这些点。空路线会根据当前车道向前延伸。</li><li>从左侧应用匀速、起停、前车急刹、切入、超车、跟车或静止预设。主车与背景车都可使用。预设替换当前车辆的片段，并将其旧条件事件中的运动动作替换为标记，保留其他参与者的事件依赖；原始模板可重新加载。</li><li>底部点击“＋速度”等添加片段。拖动片段改变开始时刻，拖动右边缘改变持续时间。点击片段在右侧填写目标速度、方向、车距等。吸附精度可切换 0.1 / 0.5 / 1 秒。</li><li>点击“预演”观看编辑器估计的运动。点击时间刻度可查看任意时刻；“实机预览”则在 CARLA 中按预演位置布置并显示真实相机，可拖动时间查看。</li><li>点击“运行并录制”开始物理运行。运行中编排被冻结，可暂停、手动接管、调整环境或停止。结束后在“轨迹录制库”查看实际录制。</li></ol><table><thead><tr><th>片段</th><th>含义</th></tr></thead><tbody><tr><td>速度</td><td>从之前目标速度过渡到新目标，支持线性或平滑插值；结束后保持新目标。实际车辆仍受加减速与物理约束。</td></tr><tr><td>变道</td><td>在指定时长内平滑改变横向目标偏移，结束后保持新偏移。多个变道累加；需要在道路上选择存在且同向的目标车道。</td></tr><tr><td>跟车</td><td>指定前车、反应延迟、最小净车距和时间车距。该车目标速度同时作为速度上限；只在目标位于前方同车道时采用跟车约束。</td></tr><tr><td>制动</td><td>片段内施加 0–1 制动强度，期间油门为零；结束后恢复自动速度控制。速度和制动片段不允许时间重叠。</td></tr><tr><td>灯光</td><td>在片段内设置灯光位状态。结束后保持最后灯光状态；需要关闭时添加关闭灯光片段。</td></tr></tbody></table><p class="note">“预演”是路径与目标速度估计，不是物理仿真。跟车的真实速度、碰撞、条件事件和人工输入只能通过实机录制核验。时间轴中的车道偏移不是路权或避碰保证；编辑后应检查道路和风险时序。</p></section>
-<section id="environment"><h2>3. 环境对照：保持实际车辆轨迹</h2><ol><li>在运动编排模式完成一次录制。</li><li>点击“固定轨迹 · 环境”或“轨迹录制库”，选中基准。编辑器载入基准的车辆与时间轴并锁定。</li><li>右侧“环境”选择清晰日光、低角度日光、雨天或暮色等预设。可细调太阳角度、云量、雾、雨量、湿润、曝光、Gamma、Bloom 和运动模糊。</li><li>点击“重放并录制”。环境模式关闭录制车辆物理，逐帧提交记录的位置与姿态，显示的速度取自原录制。服务端会校验基准的运动字段，拒绝夹带位置、路线、速度或时间轴变化。</li><li>预览或运行中也可点“应用到实机预览”即时更新天气与相机；完整 A/B 对照建议先停止，选定参数后从头重放。</li><li>到运行文件夹比较相同时间的 <code>shot_0002000.jpg</code> 等截图。时间单位为毫秒，示例是第 2 秒。日志记录应用环境的时刻。</li></ol><p class="note">这是记录位置的确定性重放，适合把车辆运动固定后比较视觉环境。它不是在不同天气下重新计算轮胎、摩擦与碰撞的物理仿真；湿润参数也不会自动修改轮胎摩擦。相机可能因渲染负载丢帧，比较截图须使用确实存在的相同时间点。</p><p>要修改车辆行为，点“运动编排”生成一个可编辑副本，修改后重新录制。录制 JSON 与场景 JSON 必须一起保留，单独导出环境场景不包含基准轨迹数据。</p></section>
-<section id="manual"><h2>4. 主车随时接管</h2><p>在物理运行或固定轨迹重放期间，点击“M 接管”或按 <kbd>M</kbd>。驾驶画面会放大，HUD 显示当前控制权。接管优先级高于所有时间轴动作；只有“R 自动”会主动交还控制权。</p><table><thead><tr><th>输入</th><th>作用</th></tr></thead><tbody><tr><td><kbd>M</kbd></td><td>请求手动接管；默认键盘，也可使用已选择的手柄/方向盘。</td></tr><tr><td><kbd>W</kbd> / <kbd>S</kbd></td><td>油门 / 制动。</td></tr><tr><td><kbd>A</kbd> / <kbd>D</kbd></td><td>向左 / 向右转向。</td></tr><tr><td><kbd>Space</kbd></td><td>手动时全制动；停止运行时播放/暂停编辑器预演。</td></tr><tr><td><kbd>R</kbd></td><td>恢复物理自动跟随路线，不跳回原录制位置。</td></tr><tr><td><kbd>Ctrl+S</kbd> / <kbd>Ctrl+Z</kbd> / <kbd>Ctrl+Y</kbd></td><td>保存 / 撤销 / 重做编排。</td></tr></tbody></table><p>浏览器必须保持焦点。切换窗口、断开设备或超过约 0.35 秒未收到有效输入时，车辆进入制动；控制权仍保持手动。重新点击接管恢复输入。服务器使用控制权代数与序号拒绝旧输入包。</p><p class="note">环境重放中接管会恢复主车物理，立即标记为“主车轨迹已偏离基准”。背景车继续按基准重放。恢复自动也不会抹掉该标记或把主车传送回原位置，因此这次记录不能再宣称主车轨迹完全一致。</p><h3>手柄与方向盘</h3><p>点击“输入 ⚙”，连接设备并按一次按钮，观察设备列表。设置设备序号、转向轴、中心、半量程与死区；踏板可选择按钮或轴。轴踏板要分别填写完全松开与踩到底的原始值，可支持正向或反向轴。保存后重新接管。先在低速空场景确认方向与踏板响应。</p><p><small>当前开发机器未连接手柄/方向盘，实机接管测试使用键盘与 API 输入。浏览器 Gamepad API 兼容性取决于设备与浏览器；不包含 Logitech 力反馈 SDK 集成。布置预览不进行手动驾驶，请启动运行。</small></p></section>
-<section id="files"><h2>5. 保存、导出与运行记录</h2><table><thead><tr><th>路径</th><th>内容</th></tr></thead><tbody><tr><td><code>studio_data/scenes/*.json</code></td><td>保存的场景。再次保存前会备份旧版本到 history。</td></tr><tr><td><code>studio_data/runs/&lt;运行编号&gt;/scene.json</code></td><td>启动时的场景配置。</td></tr><tr><td><code>take.json</code> + <code>trajectory.jsonl</code></td><td>录制元数据、基准配置与每一仿真帧的实际状态。两个文件共同组成可重放轨迹。</td></tr><tr><td><code>telemetry.csv</code></td><td>时间、世界帧号、控制权、实际姿态、速度、油门、制动与转向。环境模式速度来源标记为 recorded。</td></tr><tr><td><code>events.json</code> / <code>console.txt</code></td><td>事件触发、接管、碰撞、失败与清理记录。</td></tr><tr><td><code>shot_*.jpg</code></td><td>按整数场景秒保存的实机相机截图。</td></tr></tbody></table><p>顶部“文件”菜单可导入/导出场景 JSON。另存为会创建新场景。运行数据、被试数据、缓存和本地历史不应上传代码仓库。分享环境对照时，需另外传递相应运行目录并保持其编号一致。</p></section>
-<section id="limits"><h2>6. 运行边界与排错</h2><ul><li><b>连接失败：</b>确认 CARLA 已 Play、API 端口 2000 可访问；点击刷新连接。</li><li><b>位置被占用：</b>检查两辆车是否重叠、是否放在路面内。停止后调整位置或使用车道吸附。</li><li><b>路线不连通：</b>将路线点放在连通道路上，避免跨越隔离带或地图断点。</li><li><b>片段超出时长或重叠：</b>右侧填写合法时间，先延长场景再添加后续片段。同一动作通道及速度/制动重叠会被拒绝。</li><li><b>天空/湿地面与预期不同：</b>map10 的导入材质与天空蓝图对 CARLA 天气参数支持有限。雨量与湿润数值成功应用不意味着每块材质都会出现积水反射；此代码未重建 UE 材质资产。</li><li><b>帧率：</b>编辑器默认固定步长 0.05 秒、20 Hz 仿真。慢机可能比墙钟慢，HUD 相机 FPS 是到达率，不等于前述四相机性能测试结果。</li><li><b>停止与清理：</b>停止按钮等待工作进程销毁自身创建的参与者与相机，再恢复原世界步长和天气。不要强杀 UE 或运行进程。若发生硬崩溃，请检查 CARLA 世界设置后再启动。</li><li><b>实验使用：</b>原 Scene 模板的条件事件仍保留，但新物理控制器并不保证与旧脚本的运动完全相同。正式实验需核验风险显现时刻、间距、碰撞与接管时序。</li></ul></section></main></html>
+<!doctype html>
+<!-- Generated by tools/build_manuals.py from docs/user-manual.md. Edit the Markdown source. -->
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="HYX Scene Studio 用户手册：操作流程 · 实验记录 · 环境对照"><title>用户手册 · HYX Scene Studio</title><style>
+:root{color-scheme:light;--ink:#203239;--muted:#587078;--line:#d7e2e3;--green:#086b58;--paper:#fff;--bg:#f3f6f5}
+*{box-sizing:border-box}html{scroll-padding-top:90px}body{margin:0;color:var(--ink);background:var(--bg);font:16px/1.85 "Microsoft YaHei","Noto Sans CJK SC",sans-serif}
+a{color:var(--green);text-underline-offset:3px}a:hover{text-decoration-thickness:2px}a:focus-visible,button:focus-visible,summary:focus-visible{outline:3px solid #cb9619;outline-offset:4px}
+.topbar{position:sticky;top:0;z-index:5;min-height:64px;padding:12px 28px;display:flex;align-items:center;justify-content:space-between;gap:20px;background:#153d35;color:white;border-bottom:1px solid #295046}
+.brand{font-weight:700;letter-spacing:.04em}.topbar a{color:#f0fff7;text-decoration:none}.actions{display:flex;align-items:center;gap:20px;font-size:14px}.actions button{font:inherit;padding:5px 12px;border:1px solid #72998d;border-radius:6px;background:transparent;color:white;cursor:pointer}
+.layout{max-width:1510px;margin:auto;display:grid;grid-template-columns:275px minmax(0,1fr);gap:38px;padding:30px 32px 80px}.sidebar{position:sticky;top:92px;align-self:start;max-height:calc(100vh - 118px);overflow-y:auto;padding-right:14px;scrollbar-width:thin}
+.manual-switch{display:grid;gap:8px;margin-bottom:22px}.manual-switch a{padding:8px 12px;border-radius:6px;text-decoration:none;border:1px solid var(--line);font-size:14px}.manual-switch a[aria-current=page]{background:#e0eee7;color:#154c3d;font-weight:bold;border-color:#b4cfbd}
+.toc-title,summary{font-size:13px;color:var(--muted);font-weight:bold;letter-spacing:.08em}.toc ul{padding:0;margin:12px 0;list-style:none}.toc li{margin:5px 0;line-height:1.6}.toc a{display:block;text-decoration:none;font-size:13px;padding:5px 10px;border-left:2px solid transparent;color:var(--muted)}.toc a:hover,.toc a.active{color:var(--green);background:#e9f0eb;border-left-color:var(--green)}
+.article-shell{min-width:0;background:var(--paper);padding:34px 46px 50px;border:1px solid var(--line);border-radius:10px;box-shadow:0 5px 24px #173d3510}.kicker{color:var(--green);font-size:13px;font-weight:bold;letter-spacing:.07em;margin:0 0 6px}.subtitle{color:var(--muted);font-size:14px;margin:0 0 24px}
+h1{font-size:32px;line-height:1.4;letter-spacing:-.025em;margin:10px 0 22px}h2{font-size:24px;line-height:1.5;margin:52px 0 20px;padding-top:24px;border-top:2px solid #c7dbcf}h3{font-size:19px;line-height:1.5;margin:28px 0 14px}p{margin:14px 0}li{margin:8px 0}ol,ul{padding-left:1.6em}li>p{margin:7px 0}strong{font-weight:700;color:#153f34}
+code{font: .9em/1.7 Consolas,"Microsoft YaHei",monospace;background:#eef3f0;padding:2px 5px;border-radius:4px;overflow-wrap:anywhere}pre{padding:20px 22px;border-radius:8px;background:#183931;color:#edf7ef;overflow-x:auto;font-size:14px;line-height:1.8}pre code{background:none;color:inherit;padding:0;overflow-wrap:normal;white-space:pre}blockquote{margin:20px 0;padding:8px 18px;border-left:4px solid #92b99c;background:#f0f7f1}
+.table-scroll{overflow-x:auto;margin:22px 0;border:1px solid var(--line);border-radius:7px}table{border-collapse:collapse;width:100%;font-size:14px;line-height:1.8}th,td{padding:12px 14px;text-align:left;vertical-align:top;border-bottom:1px solid var(--line);overflow-wrap:anywhere}th{background:#e9f1ed;color:#234d3e;font-weight:700}tr:last-child td{border-bottom:0}tbody tr:nth-child(even){background:#fafcfb}td:first-child{min-width:110px}td code{font-size:13px}a[data-repo-path]{cursor:help;color:#294f48;text-decoration:underline dotted;font-family:Consolas,"Microsoft YaHei",monospace}
+.doc-footer{border-top:1px solid var(--line);padding-top:22px;margin-top:50px;color:var(--muted);font-size:13px}.mobile-toc{display:none}.source-note{font-size:13px;color:var(--muted)}.skip{position:fixed;left:12px;top:-70px;padding:8px;background:#fff;z-index:20}.skip:focus{top:8px}
+.manual-figure{margin:25px 0 32px;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:#f8fbf9}.shot-button{display:block;width:100%;padding:0;border:0;background:#17202b;cursor:zoom-in;position:relative;text-align:left}.shot-canvas{position:relative;display:block;width:100%;line-height:0}.shot-canvas img{display:block;width:100%;height:auto}.shot-mark{position:absolute;border:2px solid #ffd15c;border-radius:4px;box-shadow:0 0 0 1px #152c35aa;pointer-events:none}.shot-mark b{position:absolute;left:-8px;top:-9px;display:grid;place-items:center;width:23px;height:23px;background:#ffd15c;color:#162936;border-radius:50%;font:bold 13px/1 sans-serif;box-shadow:0 1px 4px #0007}.zoom-hint{position:absolute;right:8px;bottom:8px;padding:4px 9px;background:#10281eed;color:white;border-radius:5px;font:12px/1.6 sans-serif}.manual-figure figcaption{padding:12px 16px 3px;font-size:14px;font-weight:bold;color:#224b3b}.shot-legend{list-style:none;counter-reset:step;padding:2px 16px 10px!important;margin:0;display:grid;grid-template-columns:1fr 1fr;gap:3px 20px;font-size:13px;line-height:1.7}.shot-legend li{counter-increment:step;position:relative;padding-left:28px;margin:5px 0}.shot-legend li:before{content:counter(step);position:absolute;left:0;top:2px;display:grid;place-items:center;width:20px;height:20px;background:#f4cc6b;color:#253e30;border-radius:50%;font-weight:bold}
+.shot-dialog{width:96vw;max-width:1500px;max-height:94vh;padding:0;border:1px solid #577d6c;border-radius:10px;background:#13251f;color:#fff}.shot-dialog::backdrop{background:#071811d9}.viewer-toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 16px;font-size:14px}.viewer-toolbar button{padding:7px 13px;border:1px solid #88ac99;border-radius:5px;background:#294a3b;color:#fff;cursor:pointer}.viewer-pan{overflow:auto;max-height:calc(94vh - 105px);background:#111b25}.viewer-pan .shot-canvas{margin:auto}.viewer-pan.original .shot-canvas{width:1280px;max-width:none}.viewer-note{margin:0;padding:8px 16px;font-size:12px;color:#ccdfd2}
+@media(max-width:760px){.shot-legend{grid-template-columns:1fr}.shot-mark{border-width:1px}.shot-mark b{width:18px;height:18px;font-size:11px;left:-5px;top:-6px}.viewer-toolbar{font-size:12px;flex-wrap:wrap}.zoom-hint{font-size:10px}}
+@media print{.shot-button{break-inside:avoid}.manual-figure{break-inside:avoid}.zoom-hint,.shot-dialog{display:none}.shot-mark{border-color:#9b6600}.shot-legend{font-size:9pt}}
+@media(min-width:1600px){.article-shell{padding-left:62px;padding-right:62px}}
+@media(max-width:1000px){.layout{grid-template-columns:220px minmax(0,1fr);gap:22px;padding:24px 20px 60px}.article-shell{padding:28px}.topbar{padding:12px 20px}h1{font-size:28px}}
+@media(max-width:760px){.topbar{position:static;padding:12px 16px;flex-wrap:wrap;gap:8px}.brand{font-size:15px}.actions{gap:16px;font-size:13px}.layout{display:block;padding:16px 12px 40px}.sidebar{position:static;max-height:none;padding:0}.sidebar>.toc-title,.sidebar>.toc{display:none}.manual-switch{grid-template-columns:1fr 1fr;gap:8px;margin:0 0 14px}.manual-switch a{font-size:13px;padding:8px}.mobile-toc{display:block;border:1px solid var(--line);padding:10px 14px;border-radius:6px;margin-bottom:14px}.article-shell{padding:22px 18px}.kicker{font-size:11px}h1{font-size:26px}h2{font-size:22px;margin-top:38px}h3{font-size:18px}body{font-size:15px}table{min-width:540px}pre{padding:14px;font-size:12px}html{scroll-padding-top:16px}}
+@media print{body{background:#fff;color:#000;font-size:10.5pt;line-height:1.65}.topbar,.sidebar,.skip{display:none}.layout{display:block;padding:0;max-width:none}.article-shell{padding:0;border:none;box-shadow:none}.subtitle,.kicker{font-size:9pt}h1{font-size:24pt}h2{font-size:17pt;margin-top:24pt;padding-top:12pt;break-after:avoid}h3{font-size:13pt;break-after:avoid}pre{white-space:pre-wrap;background:#f1f4f1;color:#111}pre code{white-space:pre-wrap}table{min-width:0;font-size:9pt}thead{display:table-header-group}tr{break-inside:avoid}.table-scroll{overflow:visible;border:0}a{color:#000;text-decoration:none}.doc-footer{font-size:9pt}}
+</style></head>
+<body><a class="skip" href="#content">跳到正文</a>
+<header class="topbar"><span class="brand">HYX SCENE STUDIO <span aria-hidden="true"> / </span> 文档</span><div class="actions"><a href="/">返回编辑器</a><button type="button" onclick="window.print()">打印 / 存为 PDF</button></div></header>
+<div class="layout"><aside class="sidebar" aria-label="手册导航"><nav class="manual-switch"><a href="guide.html" aria-current="page">用户手册</a><a href="maintenance.html">开发维护手册</a></nav><div class="toc-title">本页目录</div><div class="toc">
+<ul>
+<li><a href="#1">1 软件能做什么</a></li>
+<li><a href="#2">2 启动与退出</a></li>
+<li><a href="#3">3 第一次完成一段录制</a></li>
+<li><a href="#4">4 认识界面和保存方式</a></li>
+<li><a href="#5">5 布置参与者和路线</a></li>
+<li><a href="#6">6 使用时间轴安排动作</a></li>
+<li><a href="#7">7 高级条件事件</a></li>
+<li><a href="#8">8 预演、运行和时间怎样对应</a></li>
+<li><a href="#9">9 手动驾驶与设备设置</a></li>
+<li><a href="#10">10 固定轨迹做环境对照</a></li>
+<li><a href="#11">11 找到并理解运行数据</a></li>
+<li><a href="#12">12 毕设实验建议流程</a></li>
+<li><a href="#13">13 实验中减少等待和卡顿</a></li>
+<li><a href="#14">14 版本验收与使用边界</a></li>
+<li><a href="#15">15 常见问题</a></li>
+<li><a href="#16">16 快捷键与术语速查</a></li>
+</ul>
+</div>
+<details class="mobile-toc"><summary>展开本页目录</summary><div class="toc">
+<ul>
+<li><a href="#1">1 软件能做什么</a></li>
+<li><a href="#2">2 启动与退出</a></li>
+<li><a href="#3">3 第一次完成一段录制</a></li>
+<li><a href="#4">4 认识界面和保存方式</a></li>
+<li><a href="#5">5 布置参与者和路线</a></li>
+<li><a href="#6">6 使用时间轴安排动作</a></li>
+<li><a href="#7">7 高级条件事件</a></li>
+<li><a href="#8">8 预演、运行和时间怎样对应</a></li>
+<li><a href="#9">9 手动驾驶与设备设置</a></li>
+<li><a href="#10">10 固定轨迹做环境对照</a></li>
+<li><a href="#11">11 找到并理解运行数据</a></li>
+<li><a href="#12">12 毕设实验建议流程</a></li>
+<li><a href="#13">13 实验中减少等待和卡顿</a></li>
+<li><a href="#14">14 版本验收与使用边界</a></li>
+<li><a href="#15">15 常见问题</a></li>
+<li><a href="#16">16 快捷键与术语速查</a></li>
+</ul>
+</div>
+</details></aside>
+<main id="content" class="article-shell"><p class="kicker">HYX SCENE STUDIO · 用户手册</p><p class="subtitle">操作流程 · 实验记录 · 环境对照</p><h1 id="hyx-scene-studio">HYX Scene Studio 用户手册</h1>
+<p>适用版本：界面教程以 2026 年 10 月 10 日的审核版本为基础，研究使用边界已按 2026 年 10 月 17 日实测补充。运行环境为 Windows、Python 3.10、CARLA 0.9.15，以及项目自定义的 map10 地图。</p>
+<p>本手册面向编排驾驶场景、采集车辆轨迹、进行视觉环境对照和手动接管实验的使用者。<strong>第一次用，先完成第 2 节启动，再照着<a href="#3">第 3 节的五步截图</a>做一次录制。</strong>想先认按钮，可看<a href="#4">第 4 节界面总览</a>。修改实验条件时查第 5—10 节；准备正式实验时重点阅读第 11—14 节。代码修改、接口调用和故障恢复见<a href="maintenance.html">开发维护手册</a>。</p>
+<p>图中黄色框的编号对应图下说明；<strong>点击图片可以放大，再点“原始尺寸”看清小字</strong>。截图来自本机真实操作，场景名称、运行编号和时钟会随你的操作变化。截图用的副本叫“图文练习 · 加速与变道”，原模板保留不动。</p>
+<h2 id="1">1 软件能做什么</h2>
+<p>HYX Scene Studio 是 CARLA 的本地控制界面。你在浏览器中安排车辆、路线和动作，软件通过 CARLA 运行它们，并保存实际发生的运动与控制数据。CARLA 必须事先启动。</p>
+<p>软件有两种工作方式：</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>工作方式</th>
+<th>适用任务</th>
+<th>车辆怎样运动</th>
+<th>主要结果</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>运动编排</td>
+<td>设计跟车、急刹、切入等场景，进行手动接管</td>
+<td>控制器输出油门、制动和转向，由 CARLA 物理计算运动</td>
+<td>实际轨迹、控制量、事件、截图</td>
+</tr>
+<tr>
+<td>固定轨迹 · 环境</td>
+<td>保持车辆运动，比较光照、天气和相机画面</td>
+<td>按已录制的位置和姿态逐帧重放</td>
+<td>相同运动条件下的视觉记录</td>
+</tr>
+</tbody>
+</table></div>
+<p>一次典型研究流程是：<strong>复制模板 → 修改场景 → 预演检查 → 实机录制 → 核验数据 → 锁定轨迹 → 改变环境并重放</strong>。</p>
+<p>固定轨迹适合视觉 A/B 对照。它不会重新计算雨天轮胎摩擦，也不会让背景车辆自动避让接管后的主车。需要比较车辆动力学时，应分别进行物理运行并核对实际轨迹。</p>
+<h2 id="2">2 启动与退出</h2>
+<h3 id="21">2.1 日常启动</h3>
+<ol>
+<li>在 CARLA / UE 编辑器中打开 map10，点击 <strong>Play</strong>。预期地图路径为 <code>package/Maps/map10/map10</code>，CARLA API 默认端口为 <code>2000</code>。</li>
+<li>双击项目根目录的 <code>Start-SceneStudio.cmd</code>，保持打开的服务窗口运行。</li>
+<li>浏览器打开 <code>http://127.0.0.1:8877/</code>。顶部连接栏应显示当前地图名称，中间应出现道路和场景参与者。</li>
+<li>CARLA 启动较晚时，点击 <strong>刷新连接</strong>。</li>
+</ol>
+<p>默认地址是 8877。本机本轮验收启动的更新服务使用 <strong>8879</strong>，可访问 <code>http://127.0.0.1:8879/</code>；维护者指定了其他端口时，以实际启动地址为准。不同端口的旧服务可能加载不同版本代码，正式实验应只使用确认过的那个服务。</p>
+<p>软件不会自动切换地图。开始运行前，CARLA 应处于异步模式并开启渲染；其他会推进仿真的客户端应先停止。启动时提示地图不匹配或世界已被同步客户端占用，应先解决提示，再运行场景。</p>
+<h3 id="22">2.2 新电脑首次安装</h3>
+<p>代码仓库不包含 map10 的 UE 地图资产。先准备匹配的 CARLA 与地图工程，再在项目目录中执行：</p>
+<pre><code class="language-powershell">python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements-studio.txt
+.\.venv\Scripts\python.exe -m scene_studio.server
+</code></pre>
+<p>这里的 <code>python</code> 应为 Python 3.10。日常使用不需要重复安装依赖。双击启动脚本时，会优先使用项目 <code>.venv</code>，然后尝试本机已配置的 Python。</p>
+<h3 id="23">2.3 正常退出</h3>
+<p>先点击 <strong>停止</strong>，等待状态变为 <strong>已结束</strong>或明确的错误状态，再关闭服务窗口。正常结束会清理本次创建的车辆、相机等对象，恢复进入会话前的天气与世界设置。</p>
+<p>关闭浏览器不等于停止后台仿真。若关闭了页面，重新打开同一服务地址查看会话状态。异常断电或进程崩溃的恢复方法见第 15 节和开发维护手册。</p>
+<h2 id="3">3 第一次完成一段录制</h2>
+<p>先用自带模板走通一次，不用新建车辆、输入坐标或画路线。这一轮只做：<strong>选模板 → 保存副本 → 看动作 → 实机录制 → 找到记录</strong>。</p>
+<h3 id="31">3.1 选模板并保存自己的副本</h3>
+<p>在左上角场景下拉框选择 <strong>时间轴示例 · 加速与变道</strong>。点右上 <strong>文件 → 另存为</strong>，再把上方名称改成“图文练习 · 加速与变道”，点 <strong>保存</strong>。</p>
+<figure class="manual-figure"><button class="shot-button" type="button" aria-label="放大：图 1 从场景模板另存一份练习副本"><span class="shot-canvas"><img src="manual-assets/02-file-copy.png" alt="图 1 从场景模板另存一份练习副本" width="1280" height="720" loading="lazy"><span class="shot-mark" aria-hidden="true" style="left:1.172%;top:8.889%;width:17.891%;height:4.028%"><b>1</b></span><span class="shot-mark" aria-hidden="true" style="left:89.453%;top:1.944%;width:4.453%;height:5.000%"><b>2</b></span><span class="shot-mark" aria-hidden="true" style="left:83.281%;top:13.194%;width:10.000%;height:5.000%"><b>3</b></span></span><span class="zoom-hint">点击放大 · 可看原始尺寸</span></button><figcaption>图 1 从场景模板另存一份练习副本</figcaption><ol class="shot-legend"><li>先选“时间轴示例 · 加速与变道”</li><li>点顶部“文件”展开菜单</li><li>点“另存为”，然后改名并保存</li></ol></figure>
+<p><strong>做对后看到什么：</strong>上方名称变成你的练习名称，旁边显示“已保存”，底部总时长是 25 秒。若本地模板以前被修改过，先检查实际参数，不要只按名称判断。</p>
+<h3 id="32">3.2 点一下片段 看懂车辆什么时候动作</h3>
+<p>在底部 <strong>主车</strong>这一行，点绿色的 <strong>40 km/h</strong>片段。右侧切换到片段属性，能看到 <strong>开始 1 秒、持续 4 秒、目标速度 40 km/h</strong>。这表示第 1—5 秒逐渐提高目标速度，之后保持；第一次练习保留这些数值即可。</p>
+<figure class="manual-figure"><button class="shot-button" type="button" aria-label="放大：图 2 点击时间轴片段后 在右侧查看或修改参数"><span class="shot-canvas"><img src="manual-assets/03-speed-clip.png" alt="图 2 点击时间轴片段后 在右侧查看或修改参数" width="1280" height="720" loading="lazy"><span class="shot-mark" aria-hidden="true" style="left:31.406%;top:69.444%;width:10.625%;height:4.722%"><b>1</b></span><span class="shot-mark" aria-hidden="true" style="left:77.031%;top:27.083%;width:21.016%;height:10.417%"><b>2</b></span><span class="shot-mark" aria-hidden="true" style="left:77.031%;top:38.333%;width:20.938%;height:5.000%"><b>3</b></span><span class="shot-mark" aria-hidden="true" style="left:41.484%;top:73.889%;width:10.469%;height:4.167%"><b>4</b></span></span><span class="zoom-hint">点击放大 · 可看原始尺寸</span></button><figcaption>图 2 点击时间轴片段后 在右侧查看或修改参数</figcaption><ol class="shot-legend"><li>点主车这一行的绿色速度片段</li><li>右侧：开始1秒、持续4秒</li><li>目标速度填40 km/h</li><li>蓝色变道片段是另一种动作，单独点击编辑</li></ol></figure>
+<p>主车蓝色片段表示第 5—9 秒向左变道；前车红色片段表示第 8—11 秒制动。<strong>先点哪个片段，右侧就编辑哪个片段</strong>。改完数值要保存。此处不需要再点“＋速度”，否则会多加一个片段。</p>
+<h3 id="33">3.3 先查看真实画面</h3>
+<p>点 <strong>预演</strong>只看简化车辆的大致运动，再点一次停止。点 <strong>实机预览</strong>后，等状态显示“布置预览”，中间的小相机窗口应出现真实道路。</p>
+<figure class="manual-figure"><button class="shot-button" type="button" aria-label="放大：图 3 实机预览会显示真实画面 但还没有物理录制"><span class="shot-canvas"><img src="manual-assets/06-live-preview.png" alt="图 3 实机预览会显示真实画面 但还没有物理录制" width="1280" height="720" loading="lazy"><span class="shot-mark" aria-hidden="true" style="left:21.406%;top:54.306%;width:5.625%;height:4.722%"><b>1</b></span><span class="shot-mark" aria-hidden="true" style="left:56.719%;top:29.722%;width:18.594%;height:22.361%"><b>2</b></span><span class="shot-mark" aria-hidden="true" style="left:57.344%;top:54.444%;width:6.641%;height:4.028%"><b>3</b></span><span class="shot-mark" aria-hidden="true" style="left:37.969%;top:54.583%;width:3.750%;height:4.167%"><b>4</b></span></span><span class="zoom-hint">点击放大 · 可看原始尺寸</span></button><figcaption>图 3 实机预览会显示真实画面 但还没有物理录制</figcaption><ol class="shot-legend"><li>点“实机预览”进入布置预览</li><li>这里出现CARLA真实画面</li><li>状态为“布置预览”，不是物理录制</li><li>先停止，再点“运行并录制”</li></ol></figure>
+<p><strong>做对后看到什么：</strong>小窗口里有 CARLA 道路画面，状态写“布置预览”。可以点时间刻度查看布置；要真正运行，先点 <strong>停止</strong>并等它结束。</p>
+<h3 id="34">3.4 运行并录制到终点</h3>
+<p>点绿色 <strong>运行并录制</strong>，等状态从“启动中”变成“运行中”。此时时钟前进、车辆实际运动、编辑按钮变灰。第一轮可以直接等到 <strong>25.0 秒</strong>自动结束。</p>
+<figure class="manual-figure"><button class="shot-button" type="button" aria-label="放大：图 4 运行中的暂停 继续与停止按钮"><span class="shot-canvas"><img src="manual-assets/07-running-paused.png" alt="图 4 运行中的暂停 继续与停止按钮" width="1280" height="720" loading="lazy"><span class="shot-mark" aria-hidden="true" style="left:27.188%;top:54.583%;width:6.250%;height:4.167%"><b>1</b></span><span class="shot-mark" aria-hidden="true" style="left:33.750%;top:54.583%;width:3.828%;height:4.167%"><b>2</b></span><span class="shot-mark" aria-hidden="true" style="left:57.656%;top:54.583%;width:6.172%;height:4.028%"><b>3</b></span><span class="shot-mark" aria-hidden="true" style="left:37.812%;top:54.583%;width:3.906%;height:4.167%"><b>4</b></span></span><span class="zoom-hint">点击放大 · 可看原始尺寸</span></button><figcaption>图 4 运行中的暂停 继续与停止按钮</figcaption><ol class="shot-legend"><li>从这里启动“运行并录制”</li><li>运行后可暂停；暂停后按钮显示“继续”</li><li>这里看运行状态与试次时间</li><li>需要提前结束时点停止</li></ol></figure>
+<p>图中为了展示按钮，已经在 <strong>14.1 秒暂停</strong>。如果你也点了暂停，再点 <strong>继续</strong>才能往下跑；暂停时钟不走是正常的。<strong>停止会提前结束这一段</strong>，不等于暂停。第一次练习不必接管，接管操作见第 9 节。</p>
+<h3 id="35">3.5 找到刚才录下来的内容</h3>
+<p>运行结束后，在左侧向下滚动，展开 <strong>最近运行</strong>。找你的练习名称：正式完成的记录应显示 <code>finished · 25.0s</code>。同名的 <code>0.0s</code>条目可能是刚才的布置预览，不要把它当成这段正式录制。</p>
+<figure class="manual-figure"><button class="shot-button" type="button" aria-label="放大：图 5 从左侧最近运行下载本次记录"><span class="shot-canvas"><img src="manual-assets/10-run-results.png" alt="图 5 从左侧最近运行下载本次记录" width="1280" height="720" loading="lazy"><span class="shot-mark" aria-hidden="true" style="left:1.016%;top:15.139%;width:13.828%;height:8.472%"><b>1</b></span><span class="shot-mark" aria-hidden="true" style="left:3.672%;top:18.889%;width:7.500%;height:2.778%"><b>2</b></span><span class="shot-mark" aria-hidden="true" style="left:93.203%;top:9.167%;width:5.859%;height:4.722%"><b>3</b></span></span><span class="zoom-hint">点击放大 · 可看原始尺寸</span></button><figcaption>图 5 从左侧最近运行下载本次记录</figcaption><ol class="shot-legend"><li>左侧最新的25.0秒记录是本次正式录制</li><li>轨迹、事件、配置分别可下载</li><li>轨迹录制库用于选择重放基准</li></ol></figure>
+<p><strong>轨迹</strong>下载车辆数据表，<strong>事件</strong>下载事件记录，<strong>配置</strong>下载本次场景参数。图中间的会话时钟在重新打开服务后可能显示“尚未运行”，此时仍可在左侧查看已经保存的历史记录。</p>
+<p>随后点上方 <strong>轨迹录制库</strong>，核对练习名称、运行编号与 25.0 秒实际时长。想保持这次运动、换一种光照，接着按<a href="#10">第 10 节的截图</a>操作。</p>
+<p>成功标准是：状态为 <strong>已结束</strong>、无运行异常、实际时长达到设计终点，且运行目录中的 <code>take.json</code> 同时显示 <code>complete: true</code> 和 <code>covers_scene_duration: true</code>。录制库出现记录本身不能证明已跑完全程，提前正常停止的记录也可能入库。</p>
+<p>当前本机还安装了 Case172 场景库。例如 <strong>P02 · 前车明显制动，主车跟停</strong> 的设计时长为 24 秒。该场景库的批量安装和验收工具见开发维护手册；新下载的项目不会仅靠打开页面就自动生成这 26 个场景。</p>
+<h2 id="4">4 认识界面和保存方式</h2>
+<h3 id="41">4.1 界面分区</h3>
+<p>先记住五个位置：<strong>左上选场景，左侧选车，右侧改参数，底部排动作，中间下方运行</strong>。右侧属性区和左侧列表都能各自滚动；找不到参数时，把鼠标放到对应区域再滚轮下翻。</p>
+<figure class="manual-figure"><button class="shot-button" type="button" aria-label="放大：图 6 编辑器主要操作区域"><span class="shot-canvas"><img src="manual-assets/01-overview.png" alt="图 6 编辑器主要操作区域" width="1280" height="720" loading="lazy"><span class="shot-mark" aria-hidden="true" style="left:1.094%;top:8.611%;width:18.047%;height:4.444%"><b>1</b></span><span class="shot-mark" aria-hidden="true" style="left:0.781%;top:15.139%;width:14.297%;height:24.722%"><b>2</b></span><span class="shot-mark" aria-hidden="true" style="left:76.562%;top:15.556%;width:22.656%;height:35.833%"><b>3</b></span><span class="shot-mark" aria-hidden="true" style="left:17.031%;top:60.000%;width:81.797%;height:36.389%"><b>4</b></span><span class="shot-mark" aria-hidden="true" style="left:17.188%;top:54.028%;width:22.812%;height:5.000%"><b>5</b></span></span><span class="zoom-hint">点击放大 · 可看原始尺寸</span></button><figcaption>图 6 编辑器主要操作区域</figcaption><ol class="shot-legend"><li>左上选场景</li><li>左侧选主车或前车</li><li>右侧改选中对象的参数</li><li>底部时间轴安排动作</li><li>这里预演、预览、录制和停止</li></ol></figure>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>区域</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>顶部模式栏</td>
+<td>切换运动编排与固定轨迹环境对照，查看连接，保存和导入导出</td>
+</tr>
+<tr>
+<td>场景名称栏</td>
+<td>选择已保存场景、改名、撤销重做、刷新连接、打开轨迹库</td>
+</tr>
+<tr>
+<td>左侧</td>
+<td>选择或添加参与者，应用行为预设，编辑高级条件事件，查看最近运行</td>
+</tr>
+<tr>
+<td>中间地图</td>
+<td>布置车辆、绘制路线、观察估计运动</td>
+</tr>
+<tr>
+<td>CARLA 实机窗口</td>
+<td>查看真实相机，切换驾驶位、追随和俯视视角</td>
+</tr>
+<tr>
+<td>右侧属性</td>
+<td>编辑选中的参与者、片段、条件或环境</td>
+</tr>
+<tr>
+<td>底部时间轴</td>
+<td>设置总时长，添加片段，改变片段开始时间与持续时间</td>
+</tr>
+<tr>
+<td>播放控制栏</td>
+<td>预演、实机预览、录制、暂停、停止、手动接管</td>
+</tr>
+</tbody>
+</table></div>
+<p>中间地图使用简化模型。道路形状来自地图道路数据，不等同于 CARLA 中每一条可见车道线；道路拓扑错误和材质上的车道线错误需要分别检查。</p>
+<p>地图中左键选择或操作控件，右键平移，滚轮缩放。<strong>聚焦 F</strong>用于找到选中参与者。地图工具栏的 <strong>俯视</strong>改变编辑视图；相机下拉框的 <strong>俯视</strong>改变真实相机，两者是不同入口。</p>
+<h3 id="42">4.2 保存、另存为、导入与导出</h3>
+<p><strong>保存</strong>把当前场景写入本机场景库。已有场景再次保存时，旧文件会备份到 <code>studio_data/history/</code>。<strong>另存为</strong>创建并保存新编号的副本，适合保留基准后再改条件。</p>
+<p><strong>导出 JSON</strong>下载当前页面中的配置，包含尚未保存的修改。<strong>导入 JSON</strong>校验文件后替换当前草稿，仍需点击保存才能进入场景库。运行按钮也能使用未保存草稿，但不会自动将草稿保存到场景库；本次实际启动配置另存在运行目录的 <code>scene.json</code>。</p>
+<p><strong>导出可运行 .py</strong>将当前草稿及输入设备设置写入一份 Python 文件，可选择 10、20、40 或 60 Hz。先在 CARLA 中打开对应地图并进入 Play，再用项目的 Python 3.10 运行下载的文件。它直接连接本机 CARLA，不需要浏览器或编辑器服务继续运行；但仍需本项目的 <code>scene_studio</code> 代码和依赖，移动项目后可加 <code>--project-root 项目目录</code>。本机双击 <code>.py</code> 会打开 VS Code，应使用其中的“运行 Python 文件”，或在终端执行 <code>python 下载的文件.py</code>。</p>
+<p>脚本默认打开实时相机窗口；按 <strong>M</strong> 接管，<strong>W/S/A/D</strong> 控车，<strong>空格</strong>制动，<strong>R</strong> 交回自动，<strong>Q</strong> 或 <strong>Esc</strong> 提前结束。导出时保存的手柄/方向盘设置也可用于脚本，运行时可加 <code>--input keyboard</code> 临时改用键盘。没有显示器的批量运行可加 <code>--no-window</code>。每次运行生成新的 <code>studio_data/runs/py_.../</code>：<code>telemetry.csv</code> 记车辆状态，<code>trajectory.jsonl</code> 记逐帧轨迹，<code>events.json</code> 记事件，<code>driver_input.csv</code> 记窗口读取到的驾驶输入，<code>take.json</code> 标明是否覆盖计划时长，<code>console.txt</code> 保存诊断。脚本不采集眼动数据。环境重放仍需保留原基准运行目录。</p>
+<p>未保存的草稿只在页面内存中，没有自动恢复保证。离开页面时的提醒不代表已经保存。撤销和重做最多保留约 50 个编辑快照；切换或新建场景会清理相应编辑历史。</p>
+<p>软件没有历史版本浏览器。恢复旧配置时，先保留当前版本，再从 <code>studio_data/history/</code> 找到需要的 JSON，通过 <strong>导入 JSON</strong>查看，确认后另存为。</p>
+<h2 id="5">5 布置参与者和路线</h2>
+<h3 id="51">5.1 添加和选择主车</h3>
+<p>左侧 <strong>＋</strong>添加默认轿车；<strong>添加模型</strong>提供轿车、消防车、摩托车和行人快捷入口。对象添加在当前视图中心附近，然后使用移动和旋转控件布置。车型列表不支持直接拖入地图。</p>
+<p>右侧 <strong>模型</strong>列表来自当前 CARLA，实际可用车型由地图服务端决定。修改位置前，停止会话、切回运动编排，并把播放头移到 <strong>0 秒</strong>。</p>
+<p><strong>主车</strong>是相机和手动驾驶的对象。选择车辆后点击 <strong>设为主车</strong>；主车必须是车辆，并勾选 <strong>初始生成</strong>。背景参与者可以取消初始生成，之后由条件事件生成。</p>
+<h3 id="52">5.2 主要参数的含义</h3>
+<p>选中左侧主车，点右侧 <strong>参与者</strong>页签，再在该面板内向下滚动，即可找到速度和加减速度。图中 <strong>28 km/h</strong>是车辆基础目标速度，时间轴片段随后可以改变它。</p>
+<figure class="manual-figure"><button class="shot-button" type="button" aria-label="放大：图 7 在参与者面板修改车辆参数"><span class="shot-canvas"><img src="manual-assets/04-actor-settings.png" alt="图 7 在参与者面板修改车辆参数" width="1280" height="720" loading="lazy"><span class="shot-mark" aria-hidden="true" style="left:0.938%;top:21.389%;width:13.828%;height:8.194%"><b>1</b></span><span class="shot-mark" aria-hidden="true" style="left:76.953%;top:15.556%;width:5.000%;height:3.889%"><b>2</b></span><span class="shot-mark" aria-hidden="true" style="left:77.031%;top:33.333%;width:21.094%;height:15.833%"><b>3</b></span></span><span class="zoom-hint">点击放大 · 可看原始尺寸</span></button><figcaption>图 7 在参与者面板修改车辆参数</figcaption><ol class="shot-legend"><li>先在左侧选中主车</li><li>切到“参与者”页签</li><li>在右侧下滚，找到速度与加减速度</li></ol></figure>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>参数</th>
+<th>单位与作用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>X、Y、Z</td>
+<td>米；地图世界坐标，Z 为高度</td>
+</tr>
+<tr>
+<td>朝向</td>
+<td>度；控制初始车头方向</td>
+</tr>
+<tr>
+<td>速度</td>
+<td>km/h；自动控制的目标速度，范围 0—180，不保证瞬时达到</td>
+</tr>
+<tr>
+<td>加速度、减速度</td>
+<td>m/s²；限制控制器内部命令速度的变化率，实际加减速还受车辆动力学影响</td>
+</tr>
+<tr>
+<td>左偏移</td>
+<td>米；正值向路线左侧，负值向右侧，范围 −10—10</td>
+</tr>
+<tr>
+<td>启动即具有目标速度</td>
+<td>初始赋速；不勾选时从静止开始，之后仍由控制器驱动</td>
+</tr>
+<tr>
+<td>初始生成</td>
+<td>运行开始时生成；未勾选的背景对象需要生成事件</td>
+</tr>
+<tr>
+<td>基础行为</td>
+<td>实验车辆按编排运动；普通交通使用本软件的自适应跟车；静止障碍物保持静止；行人沿点移动</td>
+</tr>
+</tbody>
+</table></div>
+<p>加减速度斜坡和初始赋速说明适用于车辆。初始赋速仅作用于启动时已生成的非静止车辆；之后由事件生成的车辆不经过这一初始化。行人不使用车辆的加减速斜坡与初始赋速开关。行人和延迟生成车辆的起步状态应单独实测。</p>
+<p>“普通交通”不是自动生成整个城市的随机交通，也不代表接入了 CARLA Traffic Manager 的完整路权系统。</p>
+<p><strong>吸附车道</strong>用于把对象重新定位到道路。手填坐标会关闭该对象的吸附标记；改完后若需沿道路起步，重新点吸附车道，并在真实画面中检查高度和重叠。</p>
+<h3 id="53">5.3 绘制路线</h3>
+<ol>
+<li>选择一个参与者，点击工具栏 <strong>路线</strong>或右侧 <strong>绘制路线</strong>。</li>
+<li>沿期望方向依次点击道路，生成有序路线点。车辆点会吸附道路，行人点不吸附。</li>
+<li>点击 <strong>完成绘制</strong>退出。在停止的运动编排状态下，右侧可以修改路线点 X、Y，也可以删除某个点或清空路线；当前没有拖动路线点、单独修改点 Z 和重新排序点的入口。</li>
+<li>点击预演，检查实际规划出的连接路径。</li>
+</ol>
+<figure class="manual-figure"><button class="shot-button" type="button" aria-label="放大：图 8 在道路上点击后 右侧出现一个路线点"><span class="shot-canvas"><img src="manual-assets/05-route-point.png" alt="图 8 在道路上点击后 右侧出现一个路线点" width="1280" height="720" loading="lazy"><span class="shot-mark" aria-hidden="true" style="left:24.766%;top:15.417%;width:2.969%;height:4.028%"><b>1</b></span><span class="shot-mark" aria-hidden="true" style="left:47.969%;top:27.639%;width:4.141%;height:6.944%"><b>2</b></span><span class="shot-mark" aria-hidden="true" style="left:77.188%;top:38.472%;width:20.547%;height:4.444%"><b>3</b></span><span class="shot-mark" aria-hidden="true" style="left:77.188%;top:33.056%;width:4.922%;height:4.306%"><b>4</b></span></span><span class="zoom-hint">点击放大 · 可看原始尺寸</span></button><figcaption>图 8 在道路上点击后 右侧出现一个路线点</figcaption><ol class="shot-legend"><li>点“路线”进入画点模式</li><li>在道路上点一下，生成路线点</li><li>点会出现在右侧，可改X/Y或删除</li><li>画完点“完成绘制”退出</li></ol></figure>
+<p>图中只演示“点击道路 → 出现坐标点 → 完成绘制”的过程，截图后已撤销这个点。<strong>第一次做第 3 节练习时保留模板路线即可，不必照抄图中坐标。</strong>以后自己设计路线，再按上面步骤逐点添加。</p>
+<p>车辆会沿道路网络连接这些点，不会把任意两个点直接当成可驾驶直线。空路线会根据当前车道向前规划。跨越隔离带、逆向放点、道路断裂都可能导致规划失败或路径不符合预期。</p>
+<p><strong>复制</strong>参与者会复制它的片段，生成新编号并偏移位置，但不会复制引用它的条件事件。<strong>移除</strong>参与者还会清理引用它的事件、跟车片段及失去依赖的后续事件；删除前先保存副本。</p>
+<h2 id="6">6 使用时间轴安排动作</h2>
+<p>时间轴适合“第几秒做什么、持续多久”的编排。先选车辆，再点击 <strong>＋速度、＋变道、＋跟车、＋制动、＋灯光</strong>。新片段通常从播放头开始、持续 3 秒；有冲突时会尝试寻找后续空位，剩余空间不足则拒绝添加。</p>
+<p>拖动片段改变开始时间，拖动右边缘改变持续时间。点击片段可在右侧准确填写开始、持续时间、启用状态和动作参数。时间吸附可选 0.1、0.5 或 1 秒；<strong>− / 适配 / ＋</strong>控制时间轴显示比例。</p>
+<h3 id="61">6.1 五种片段</h3>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>片段</th>
+<th>运行期间</th>
+<th>结束以后</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>速度</td>
+<td>从上一目标速度逐渐变到指定目标，可选线性或平滑过渡</td>
+<td>保持新的目标速度</td>
+</tr>
+<tr>
+<td>制动</td>
+<td>油门为零，按 0—1 的强度制动；路线转向仍继续</td>
+<td>恢复自动速度控制</td>
+</tr>
+<tr>
+<td>变道</td>
+<td>在设定时长内改变横向目标偏移，可向左或右跨 1—3 条车道</td>
+<td>保持新偏移；后续变道在此基础上累加</td>
+</tr>
+<tr>
+<td>跟车</td>
+<td>对指定前车使用反应延迟、最小车距和时间车距约束</td>
+<td>移除这段显式跟车关系；普通交通行为仍可能自动选择前车</td>
+</tr>
+<tr>
+<td>灯光</td>
+<td>使用关闭、近光、转向灯或双闪等所选状态</td>
+<td><strong>恢复片段开始前的灯光状态</strong></td>
+</tr>
+</tbody>
+</table></div>
+<p>跟车片段默认反应延迟 0.8 秒、最小车距 4 米、时间车距 1.2 秒。时间车距表示随速度增加的跟随距离要求；反应延迟是模型参数，不是对被试反应时间的测量。目标速度仍限制车辆的期望速度，跟车效果需用实际运行核验。</p>
+<p>变道是路线偏移控制，不自动证明目标车道存在、允许变道或没有其他车辆。正式实验前应检查车道方向、可用宽度和切入时序。</p>
+<h3 id="62">6.2 冲突规则</h3>
+<p>同一辆车同一动作通道的启用片段不能重叠。<strong>速度与制动属于同一个纵向通道</strong>；例如 2—6 秒加速期间不能再放 4—5 秒制动。可改为 2—4 秒加速、4—5 秒制动、5—7 秒恢复目标速度。</p>
+<p>不同车辆可以同时动作；同一辆车的速度、变道和灯光可在不同通道并行。拖动造成非法重叠时会回退；手工填写后的校验错误要修正后才能运行。<strong>复制片段</strong>通常接在原片段后面，空间不足或冲突时会拒绝。</p>
+<p>每个片段至少持续 0.1 秒，且必须完全位于场景时长内。总时长必须是仿真步长的整数倍。当前界面只允许为车辆添加片段；行人速度片段虽有配置层支持，尚无正常的界面添加入口。</p>
+<h3 id="63">6.3 行为预设</h3>
+<p>左侧提供 <strong>匀速沿线、起步 · 停车 · 再起步、前车急刹、相邻车道切入、变道超车 · 回到原车道、跟车、静止障碍物</strong>。</p>
+<p>预设应用到当前选中的车辆，会<strong>替换它原有的片段</strong>。该车已启用的旧运动事件会改为事件标记，以保留其他事件的依赖。应用前另存为；应用后检查整条时间轴、跟车目标和事件列表，再运行。</p>
+<h3 id="64">6.4 双车练习</h3>
+<p>选择 <strong>时间轴示例 · 跟车与前车制动</strong>，另存为练习副本。原始模板中主车在 0—25 秒跟随前车，前车在 6—10 秒以 0.8 强度制动。先录制原参数，再只修改前车制动强度并另存为第二个条件。</p>
+<p>比较时检查前车实际减速、主车实际速度和两车位置。离线预演不计算真实跟车响应，因此不能用预演中看起来“没有追尾”作为成功标准。</p>
+<h2 id="7">7 高级条件事件</h2>
+<p>需要“距离小于某值才制动”或“前一个事件发生后再等待一段时间”时，使用左侧 <strong>高级条件事件 → ＋条件事件</strong>，并在右侧 <strong>条件</strong>面板设置触发方式与动作。每个启用事件在一次物理运行中只触发一次。</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>触发方式</th>
+<th>应填写的条件</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>仿真时间</td>
+<td>从本次试次开始计算的秒数，不包含暂停时长</td>
+</tr>
+<tr>
+<td>通过坐标</td>
+<td>参与者的 X 或 Y 坐标与指定米数比较</td>
+</tr>
+<tr>
+<td>参与者间距离</td>
+<td>两个参与者在 XY 平面上的中心点距离，单位米</td>
+</tr>
+<tr>
+<td>接近地点</td>
+<td>到给定 X、Y 地点的平面距离</td>
+</tr>
+<tr>
+<td>参与者速度</td>
+<td>实际速度与阈值比较，单位 km/h</td>
+</tr>
+<tr>
+<td>另一事件之后</td>
+<td>选择前置事件，再填写延迟秒数</td>
+</tr>
+</tbody>
+</table></div>
+<p>距离条件不等于保险杠之间的净空。要表达“进入 10 米内”，应使用小于或等于 10。事件每个仿真步检查一次，实际触发时刻可能晚于理论阈值一个步长；同一步多个事件按列表顺序处理，顺序可能影响结果。</p>
+<p>当前实现写入设计终点的最后一帧后直接结束，不再检查该时刻的条件。因此不要把结束标记安排在恰好等于总时长的位置，应至少提前一个步长；是否到达计划终点用实际轨迹时长核验。</p>
+<p>例如，先建“5 秒时记录风险开始”的<strong>事件标记</strong>，再建“该事件 2 秒后记录观察窗结束”的标记，运行后在 <code>events.json</code> 核对触发时刻。标记只记日志，不会自动播放提示音。</p>
+<p>事件动作支持速度、制动、变道、偏移、跟车、沿绘制路线行驶、灯光、切换光影、生成或移除参与者、标记和结束场景。注意以下差异：</p>
+<ul>
+<li>制动事件没有片段结束时刻，会持续制动，直到后续速度动作清除制动覆盖；制动值设为 0 表示滑行，不等于恢复自动速度控制。</li>
+<li>变道事件使用<strong>变道距离（米）</strong>；变道片段使用<strong>持续时间（秒）</strong>。</li>
+<li>同车同通道不能混用启用的事件动作与时间轴片段，即使它们设想发生在不同时间，也会被校验拒绝。</li>
+<li>固定轨迹重放不重新执行场景事件。需要环境 A/B 时，先选定静态环境参数再从头重放。</li>
+</ul>
+<p>界面目前保留了“立即执行动作”按钮，但它没有可用的常规运行操作流程，不作为本手册的测试或实验入口。</p>
+<h2 id="8">8 预演、运行和时间怎样对应</h2>
+<h3 id="81">8.1 三种查看方式</h3>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>按钮</th>
+<th>使用 CARLA 真实画面</th>
+<th>计算物理运动</th>
+<th>可拖动时间</th>
+<th>生成可重放轨迹</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>预演</td>
+<td>否</td>
+<td>否</td>
+<td>可以</td>
+<td>否</td>
+</tr>
+<tr>
+<td>实机预览</td>
+<td>是</td>
+<td>否；运动模式按估计位置，环境模式按已录制姿态布置</td>
+<td>可以</td>
+<td>否</td>
+</tr>
+<tr>
+<td>运行并录制</td>
+<td>是</td>
+<td>是</td>
+<td>不可以</td>
+<td>正常产生多帧并封存后可以</td>
+</tr>
+</tbody>
+</table></div>
+<p>环境模式的 <strong>重放并录制</strong>使用已有实际轨迹。任何实机会话都应先停止，再开始另一场。暂停状态下仍属于运行中的会话，不能编辑运动，也不能跳帧。</p>
+<h3 id="82-tick">8.2 tick 与同步模式</h3>
+<p>可以把 CARLA 想成一本逐页计算的动态画册。一次 <strong>tick</strong>就是“请计算下一页”：接收当前控制命令，推进物理，得到下一帧车辆状态。<strong>同步模式</strong>表示 CARLA 等待控制程序发出这次推进请求，再计算下一步。</p>
+<p>本软件默认每步推进 <strong>0.05 秒仿真时间</strong>，因此 20 步等于 1 秒仿真时间。若电脑花了 2 秒才算完这 20 步，场景时钟仍只增加 1 秒。仿真时间、电脑现实经过的时间、相机图像到达速度是三个不同量。</p>
+<p>界面里的相机 <strong>FPS</strong>是图像回调到达率，不直接等于物理仿真步数或屏幕显示帧率。相机默认 1280×720、20 Hz、100°视场角；默认 0.05 秒步长下，把相机采样设成 60 Hz 也不会得到每个仿真秒 60 个独立采样。当前界面不提供步长编辑器，修改场景配置中的步长应按维护手册验证。</p>
+<p>当前场景校验接受 0.1、0.05、0.025 和 1/60 秒步长，分别对应 10、20、40、60 Hz。早期 20/40 Hz 完整测试与 1/60 秒被拒绝的报告是修改前基线；本次新增的 Python 导出已通过 60 Hz 短时实机运行。这里的 60 Hz 指车辆状态步长，不等于显示器呈现、相机图像、方向盘或眼动都达到 60 Hz；这些还需按正式实验配置单独验证。</p>
+<h3 id="83">8.3 目标速度怎样变成车辆运动</h3>
+<p>控制过程是：<strong>路线与目标速度 → 控制器 → 油门、制动、转向 → CARLA 物理 → 实际位置与速度</strong>。</p>
+<p><code>vehicle.apply_control(control)</code> 把一组控制输入交给车辆。<code>control</code> 中常用的油门和制动范围为 0—1，转向范围为 −1—1。这个调用本身不返回车速，Python 返回值为 <code>None</code>；运动结果要看后续仿真步的状态。因此“目标 40 km/h”与“CSV 里实际 40 km/h”不是同一件事。</p>
+<h3 id="84">8.4 暂停</h3>
+<p><strong>暂停</strong>会冻结试次时间和本次参与者的运动，同时仍允许世界推进以刷新画面。暂停时看到新图像并不表示实验时间继续增长。正式轨迹与截图会排除暂停和预热帧，所以 CSV 的世界帧号可能跳号；判断时间连续性应结合 <code>time</code> 和 <code>frame</code>，不能只看帧号差。</p>
+<h2 id="9">9 手动驾驶与设备设置</h2>
+<h3 id="91">9.1 键盘接管</h3>
+<p>启动物理运行或轨迹重放后，点击场景或驾驶区域使页面获得焦点，按 <strong>M</strong>或点 <strong>M 接管</strong>。确认控制权显示手动，再输入油门、制动和转向。</p>
+<figure class="manual-figure"><button class="shot-button" type="button" aria-label="放大：图 9 接管后 画面显示 KEYBOARD 键盘控制权"><span class="shot-canvas"><img src="manual-assets/08-manual-control.png" alt="图 9 接管后 画面显示 KEYBOARD 键盘控制权" width="1280" height="720" loading="lazy"><span class="shot-mark" aria-hidden="true" style="left:63.828%;top:54.444%;width:3.906%;height:4.444%"><b>1</b></span><span class="shot-mark" aria-hidden="true" style="left:18.359%;top:36.806%;width:12.422%;height:14.028%"><b>2</b></span><span class="shot-mark" aria-hidden="true" style="left:67.891%;top:54.444%;width:3.750%;height:4.444%"><b>3</b></span><span class="shot-mark" aria-hidden="true" style="left:33.672%;top:54.583%;width:4.062%;height:4.167%"><b>4</b></span></span><span class="zoom-hint">点击放大 · 可看原始尺寸</span></button><figcaption>图 9 接管后 画面显示 KEYBOARD 键盘控制权</figcaption><ol class="shot-legend"><li>点M接管，或先点击驾驶区域再按M</li><li>KEYBOARD / 键盘表示手动控制权</li><li>点R自动交回控制权</li><li>图中为暂停示范；点继续后才会行驶</li></ol></figure>
+<p>照图先找 <strong>M 接管</strong>和 <strong>R 自动</strong>两个按钮。图中是在暂停状态下示范接管，所以速度为零；点 <strong>继续</strong>后才会实际驾驶。实际练习时按住 W 给油、A/D 转向、S 或空格制动，结束练习点 R 交回自动。</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>按键</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>M</td>
+<td>请求接管</td>
+</tr>
+<tr>
+<td>W</td>
+<td>油门</td>
+</tr>
+<tr>
+<td>S</td>
+<td>制动</td>
+</tr>
+<tr>
+<td>A / D</td>
+<td>左 / 右转向</td>
+</tr>
+<tr>
+<td>空格</td>
+<td>手动状态下全制动</td>
+</tr>
+<tr>
+<td>R</td>
+<td>恢复当前时刻的自动控制目标</td>
+</tr>
+</tbody>
+</table></div>
+<p>手动控制优先于主车的自动控制输出，但场景时间、事件和背景车仍继续。返回自动后，不会从接管时刻重新播放时间轴。</p>
+<p>当焦点位于输入框、下拉框、文本框或弹窗中时，全局驾驶快捷键不执行。切换窗口、隐藏页面或设备断开会造成输入中断；超过约 <strong>0.35 秒</strong>没有有效输入时，控制端会制动并保持手动控制权。回到页面后重新点接管，不要把无输入当成自动驾驶已经恢复。</p>
+<h3 id="92">9.2 固定轨迹重放中的接管</h3>
+<p>第一次接管会恢复主车物理，并把本次重放标记为<strong>主车轨迹已偏离基准</strong>。背景车辆继续按基准轨迹走。按 R 只恢复物理路线控制，不把主车传送回原轨迹，也不清除偏离标记。</p>
+<p>因此，这类记录可用于研究“固定背景运动下的接管”，但不能再被称为主车轨迹完全一致的视觉对照。</p>
+<h3 id="93">9.3 手柄和方向盘</h3>
+<p>点击 <strong>输入 ⚙</strong>，选择输入类型并设置设备序号、转向轴、中心、半量程、死区与反向。油门和制动可以使用按钮或轴；轴输入需要分别填写完全松开和完全踩下时的原始值。窗口可查看设备轴值和按钮值，没有自动标定程序。</p>
+<figure class="manual-figure"><button class="shot-button" type="button" aria-label="放大：图 10 输入设备设置窗口"><span class="shot-canvas"><img src="manual-assets/09-input-settings.png" alt="图 10 输入设备设置窗口" width="1280" height="720" loading="lazy"><span class="shot-mark" aria-hidden="true" style="left:19.297%;top:26.806%;width:29.453%;height:5.278%"><b>1</b></span><span class="shot-mark" aria-hidden="true" style="left:19.375%;top:37.222%;width:29.688%;height:25.000%"><b>2</b></span><span class="shot-mark" aria-hidden="true" style="left:49.922%;top:27.778%;width:29.844%;height:53.333%"><b>3</b></span><span class="shot-mark" aria-hidden="true" style="left:19.375%;top:82.778%;width:44.297%;height:8.889%"><b>4</b></span></span><span class="zoom-hint">点击放大 · 可看原始尺寸</span></button><figcaption>图 10 输入设备设置窗口</figcaption><ol class="shot-legend"><li>先选择键盘、手柄或方向盘</li><li>转向轴、中心、量程和死区在左侧</li><li>油门与制动映射在右侧</li><li>先确认识别到设备，再保存；图中未接硬件</li></ol></figure>
+<p>只用键盘时保留“键盘”即可，不用填写手柄轴参数。图中“尚未检测到手柄或方向盘”表示当时浏览器没有识别到可用设备。</p>
+<p>连接设备后先按一次按钮，观察浏览器是否识别。保存设置后重新接管，先在低速场景验证左右方向、油门松开和全制动的响应。配置保存在当前浏览器的本地存储中，不随场景 JSON 导出。</p>
+<p>截至 2026 年 10 月 17 日，相关硬件兼容性仍未完成实物验收；软件不包含力反馈和界面的换挡、倒车配置。正式使用前应对计划采用的设备和浏览器单独验收，不能仅凭设备设置界面存在就认定可以采集。</p>
+<h2 id="10">10 固定轨迹做环境对照</h2>
+<h3 id="101">10.1 从基准生成环境条件</h3>
+<ol>
+<li>完成一段物理录制，按第 11 节确认数据完整。保存其运行编号。</li>
+<li>停止当前会话，打开 <strong>轨迹录制库</strong>或点击 <strong>02 固定轨迹 · 环境</strong>。</li>
+<li>在目标记录旁点 <strong>锁定此轨迹</strong>。软件生成新的环境对照草稿，锁定运动字段，并打开右侧环境面板。</li>
+<li>先保留一个基准环境条件，改名并保存；再另存为第二个环境条件，仅修改研究需要的参数。</li>
+<li>点击 <strong>重放并录制</strong>，分别从头完成两种条件。</li>
+<li>用各自 <code>events.json</code> 的 <code>camera_samples</code> 查找真实采样时间和文件，再比较对应图像。</li>
+</ol>
+<figure class="manual-figure"><button class="shot-button" type="button" aria-label="放大：图 11 在轨迹库找到自己的录制 并锁定这一行"><span class="shot-canvas"><img src="manual-assets/11-take-library.png" alt="图 11 在轨迹库找到自己的录制 并锁定这一行" width="1280" height="720" loading="lazy"><span class="shot-mark" aria-hidden="true" style="left:19.453%;top:24.583%;width:42.578%;height:6.389%"><b>1</b></span><span class="shot-mark" aria-hidden="true" style="left:72.578%;top:25.278%;width:5.703%;height:5.000%"><b>2</b></span></span><span class="zoom-hint">点击放大 · 可看原始尺寸</span></button><figcaption>图 11 在轨迹库找到自己的录制 并锁定这一行</figcaption><ol class="shot-legend"><li>核对名称、运行编号和25.0秒实际时长</li><li>点同一行的“锁定此轨迹”</li></ol></figure>
+<p>示例中选择的是“图文练习 · 加速与变道”，实际时长 25.0 秒。<strong>名称相同也要核对运行编号</strong>，再点同一行右边的“锁定此轨迹”。你的编号会与截图不同。</p>
+<figure class="manual-figure"><button class="shot-button" type="button" aria-label="放大：图 12 锁定轨迹后 选择低角度日光并保存"><span class="shot-canvas"><img src="manual-assets/12-environment-settings.png" alt="图 12 锁定轨迹后 选择低角度日光并保存" width="1280" height="720" loading="lazy"><span class="shot-mark" aria-hidden="true" style="left:23.750%;top:1.944%;width:9.609%;height:4.722%"><b>1</b></span><span class="shot-mark" aria-hidden="true" style="left:76.719%;top:20.278%;width:21.641%;height:15.556%"><b>2</b></span><span class="shot-mark" aria-hidden="true" style="left:84.297%;top:1.944%;width:4.375%;height:4.861%"><b>3</b></span><span class="shot-mark" aria-hidden="true" style="left:26.875%;top:54.306%;width:7.734%;height:4.722%"><b>4</b></span></span><span class="zoom-hint">点击放大 · 可看原始尺寸</span></button><figcaption>图 12 锁定轨迹后 选择低角度日光并保存</figcaption><ol class="shot-legend"><li>当前是“固定轨迹 · 环境”模式</li><li>在右侧选光影预设</li><li>保存这个环境条件</li><li>之后用“重放并录制”保存对照结果</li></ol></figure>
+<p>做对后，顶部高亮 <strong>固定轨迹 · 环境</strong>，底部按钮变成 <strong>重放并录制</strong>，右侧是环境参数。示例选择“低角度日光”，另存环境条件名称后保存。车辆和时间轴变灰表示运动已锁定。</p>
+<p>若要改变车辆位置、路线、速度或片段，点击 <strong>01 运动编排</strong>生成运动副本，修改后重新录制基准。不能在锁定轨迹场景中夹带运动变化。</p>
+<h3 id="102">10.2 环境与相机参数</h3>
+<figure class="manual-figure"><button class="shot-button" type="button" aria-label="放大：图 13 低角度日光条件下的真实预览画面"><span class="shot-canvas"><img src="manual-assets/13-environment-preview.png" alt="图 13 低角度日光条件下的真实预览画面" width="1280" height="720" loading="lazy"><span class="shot-mark" aria-hidden="true" style="left:23.906%;top:1.944%;width:9.531%;height:4.861%"><b>1</b></span><span class="shot-mark" aria-hidden="true" style="left:56.719%;top:29.722%;width:18.594%;height:22.361%"><b>2</b></span><span class="shot-mark" aria-hidden="true" style="left:57.188%;top:54.444%;width:6.719%;height:4.444%"><b>3</b></span><span class="shot-mark" aria-hidden="true" style="left:26.953%;top:54.444%;width:7.969%;height:4.583%"><b>4</b></span></span><span class="zoom-hint">点击放大 · 可看原始尺寸</span></button><figcaption>图 13 低角度日光条件下的真实预览画面</figcaption><ol class="shot-legend"><li>固定轨迹模式保持基准运动</li><li>真实相机显示低角度日光效果</li><li>当前为预览，检查画面后先停止</li><li>正式对照从头重放并录制</li></ol></figure>
+<p>上图是环境条件的<strong>实机预览</strong>，用来检查画面。确认后先停止，再点 <strong>重放并录制</strong>从头保存结果；看见真实道路画面本身，并不表示已经开始正式记录。</p>
+<p><strong>环境</strong>面板可调太阳高度与方位、云量、湿润、雨量、积水、雾浓度和雾起始距离；相机外观包括 Gamma、曝光补偿、Bloom 和运动模糊。使用同一基准时，一次先改变一个研究因素，并在命名中标明条件。</p>
+<p>会话中修改天气或相机外观后，点击 <strong>应用到实机预览</strong>才发送到 CARLA；此按钮也能作用于正在运行的会话。相机宽度、高度、采样 Hz 和视场角需在下一次预览或运行时生效。完整对照应先选定参数再从头运行，避免半途改动而没有记录分析窗口。</p>
+<p>目前运行中的环境修改日志只保留预设名和时刻，没有完整保存即时自定义天气、相机覆盖值及相机视角切换。正式试次应固定起始条件；临时调整时另存参数并标记为调试试次，不能指望日志自动还原全部修改。</p>
+<p>map10 的导入材质与天空蓝图对 CARLA 天气参数支持有限。湿润或积水数值成功应用，不保证每一块路面出现相应反射，也不会自动改变轮胎摩擦。应保存实际画面作为刺激条件的证据。</p>
+<h3 id="103">10.3 对齐截图</h3>
+<p>软件在每个整数秒区间保存首个合格的正式相机采样，文件名使用<strong>实际采样时间的毫秒值</strong>。因此可能出现 <code>shot_0001050.jpg</code>，不能假设一定有 <code>shot_0001000.jpg</code>。</p>
+<p>以 <code>camera_samples</code> 的 <code>time</code>、<code>frame</code> 和 <code>file</code> 为准，再用时间与世界帧号关联 <code>telemetry.csv</code>。不同运行的世界帧号通常不同，跨条件比较应先对齐试次时间与基准轨迹状态。若没有相同采样时刻，应明确时间差，不能把相邻时间图像当成完全相同时刻。</p>
+<p>界面没有一键 A/B 图片比较或整包下载按钮。截图和完整记录在本地运行目录中；相机窗口的 <strong>▣ 保存画面</strong>仅下载当前 JPEG，不自动构成带完整时间证据的配对比较。</p>
+<h2 id="11">11 找到并理解运行数据</h2>
+<p>项目目录中的 <code>studio_data/runs/&lt;运行编号&gt;/</code> 保存每次运行结果。<strong>最近运行</strong>只列出最近 7 项，其中“轨迹”下载的是 <code>telemetry.csv</code>，“事件”是 <code>events.json</code>，“配置”是 <code>scene.json</code>。</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>文件或目录</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>studio_data/scenes/</code></td>
+<td>场景库中已保存的配置</td>
+</tr>
+<tr>
+<td><code>studio_data/history/</code></td>
+<td>场景保存前的旧版本</td>
+</tr>
+<tr>
+<td><code>scene.json</code></td>
+<td>本次启动使用的配置，包括当时的草稿内容</td>
+</tr>
+<tr>
+<td><code>telemetry.csv</code></td>
+<td>各参与者逐帧状态与控制量，用于分析</td>
+</tr>
+<tr>
+<td><code>take.json</code></td>
+<td>可重放轨迹的元数据、基准场景、实际时长和完整性信息</td>
+</tr>
+<tr>
+<td><code>trajectory.jsonl</code></td>
+<td>每行一个时间点及其参与者状态，供重放使用</td>
+</tr>
+<tr>
+<td><code>events.json</code></td>
+<td>事件、碰撞、控制权变化、截图索引、错误和清理结果</td>
+</tr>
+<tr>
+<td><code>run_manifest.json</code></td>
+<td>本次软件、地图、场景指纹，步长与版本等追溯信息</td>
+</tr>
+<tr>
+<td><code>shot_*.jpg</code></td>
+<td>按正式采样时间保存的截图</td>
+</tr>
+<tr>
+<td><code>frame.jpg</code></td>
+<td>最新相机画面，会持续覆盖，不是视频档案</td>
+</tr>
+<tr>
+<td><code>status.json</code>、<code>console.txt</code></td>
+<td>会话状态与排错日志</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="111-csv">11.1 CSV 的单位</h3>
+<p>一行表示一个参与者在一个采样时刻的状态；同一帧有多辆车，就有多行。</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>字段</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>time</code></td>
+<td>试次内的仿真时间，秒</td>
+</tr>
+<tr>
+<td><code>frame</code></td>
+<td>CARLA 世界帧号；用于同一运行内关联状态与传感器</td>
+</tr>
+<tr>
+<td><code>id</code> / <code>carla_id</code></td>
+<td>场景参与者编号 / 本次 CARLA 对象编号</td>
+</tr>
+<tr>
+<td><code>x,y,z</code></td>
+<td>米</td>
+</tr>
+<tr>
+<td><code>yaw,pitch,roll</code></td>
+<td>角度，度</td>
+</tr>
+<tr>
+<td><code>speed</code></td>
+<td>速度，km/h</td>
+</tr>
+<tr>
+<td><code>speed_source</code></td>
+<td>速度来自物理状态或录制值；固定轨迹背景通常为 <code>recorded</code></td>
+</tr>
+<tr>
+<td><code>throttle,brake</code></td>
+<td>油门、制动输入，0—1</td>
+</tr>
+<tr>
+<td><code>steer</code></td>
+<td>转向输入，−1—1</td>
+</tr>
+<tr>
+<td><code>lights</code></td>
+<td>灯光位状态</td>
+</tr>
+<tr>
+<td><code>owner</code></td>
+<td>当前主车控制权；该值也写在同帧背景行中，不表示背景车被人工驾驶</td>
+</tr>
+</tbody>
+</table></div>
+<p>分析时先按 <code>id</code> 筛选参与者，再按时间排序。不能把同一帧多车的行数当成仿真帧数，也不能把轨迹库帧数、相机回调数和屏幕 FPS 混为一谈。</p>
+<h3 id="112">11.2 判断是否可以作为正式试次</h3>
+<p>检查以下内容，并在研究记录中注明接纳或排除原因：</p>
+<ol>
+<li><code>scene.json</code> 是否为计划的条件，<code>run_manifest.json</code> 是否对应预期代码、地图和步长。</li>
+<li>状态是否正常结束，<code>events.json</code> 是否有错误、异常碰撞或残留对象。</li>
+<li><code>take.json</code> 的 <code>complete</code> 是否为真，<code>covers_scene_duration</code> 是否为真，实际 <code>duration</code> 是否达到计划时长。</li>
+<li>风险事件是否触发，时序、实际速度和车辆间距是否符合试次要求。</li>
+<li>是否发生人工接管、输入中断、提前停止或环境半途变化。</li>
+<li>所用截图是否能通过 <code>camera_samples</code> 与 CSV 对齐。</li>
+</ol>
+<p><code>complete</code>只说明记录段正常封存，<code>covers_scene_duration</code>说明覆盖设计时长，两者都不能代替实验条件检查。<code>take.json</code> 的 <code>manual_override</code>表示记录中出现过手动控制；<code>events.json</code> 中同名字段专指固定轨迹重放时主车退出锁定，物理运行中的手动驾驶不一定让后者为真。</p>
+<h3 id="113">11.3 备份和移交</h3>
+<p>保留场景 JSON 和完整运行目录，维持原运行编号。环境场景还依赖其 <code>locked_take</code> 指向的基准目录，至少需要其中的 <code>take.json</code> 和 <code>trajectory.jsonl</code>。只导出环境场景 JSON 无法在另一台电脑上恢复基准运动。</p>
+<p>不要修改原始 CSV、轨迹文件或元数据来“修复”试次。把筛选和统计结果写到单独的分析目录。运行数据、缓存和历史被代码仓库忽略，提交代码不能代替数据备份。</p>
+<h2 id="12">12 毕设实验建议流程</h2>
+<h3 id="121">12.1 从试运行到正式采集</h3>
+<ol>
+<li>写清研究变量、要保持不变的条件、有效试次标准和输出指标。例如视觉对照中固定基准轨迹、车型、相机视角与分辨率，只改变太阳角度。</li>
+<li>为每个条件另存一个命名清楚的场景；记录场景编号、代码版本、地图版本和设备设置。</li>
+<li>用实际实验车型做速度与制动校准，确认风险出现时的实际车速和距离。模型目标值不能替代校准值。</li>
+<li>先做无被试的完整试运行，确认录制结束、事件与截图对应，以及停止后的清理。</li>
+<li>采集时保持单一仿真控制程序，记录每次运行编号、条件、重复序号和异常说明。</li>
+<li>分析前按第 11 节核验数据，保留失败试次原文件，并在分析表中标明排除原因。</li>
+</ol>
+<p>推荐用 <code>研究名_条件_重复序号</code>命名场景或试次说明；身份资料与运行文件分开保管，实验目录中使用研究编号。</p>
+<h3 id="122">12.2 当前数据可以支持和不能直接支持的结论</h3>
+<p>软件可记录自动与手动控制下的实际运动、事件发生的仿真时间，以及带帧号的相机采样。固定轨迹可帮助控制视觉对照中的运动差异。</p>
+<p>当前没有测量完整的“传感器采样 → 浏览器显示 → 人看见画面 → 输入到达”的延迟。不能直接把两项仿真时间相减，解释成毫秒级真实人的反应时。研究此指标前，需要增加显示与输入时钟标定。</p>
+<p>配置中的 <code>seed</code>目前只被保存，没有驱动实验条件随机抽样；界面也没有被试管理、条件平衡分配、统一速度上下限、通用参数关键帧或安全场显示。这些需要另外实现并验收。</p>
+<p><strong>当前适合场景制作和采集流程试运行，尚不能直接开展整套毕设正式被试实验。</strong>Studio 目前只有一路 RGB 相机；四视角、眼动、方向盘与日志的联合采集尚未验收。按 M 取得控制与程序发送接管都不等于自然方向盘/踏板干预；后者还需在自动观察阶段持续保存原始输入，并标定有意操作的阈值、持续时间和实际生效时刻。眼动有效性、离视触发遮蔽与主观作答流程也需补齐。最新证据见第 14 节。</p>
+<h2 id="13">13 实验中减少等待和卡顿</h2>
+<p>先降低相机分辨率、减少不必要的参与者和其他占用 GPU 的程序，再看实际图像到达率与运行用时。调整相机采样、视场角或尺寸后要重新启动会话。</p>
+<p>正式条件间应保持相同设置。改变分辨率、相机位置、模糊或曝光可能改变刺激内容，不宜只为了提速而在试次之间临时修改。降低画面负载不等于修改仿真步长；步长变化会影响控制与事件时序，应作为独立变更重新验证。</p>
+<p>性能记录建议同时写下场景仿真时长、现实运行用时、相机设置和硬件。仅记录界面某一瞬间的 FPS 不足以比较渲染性能。</p>
+<h2 id="14">14 版本验收与使用边界</h2>
+<p>2026 年 10 月 10 日的代码验收包括：111 项 Python 测试、22 项前端检查、26 个 Case172 场景和 14 次核心运行、重放、暂停、接管及预设实机测试；14 次实机测试中检查的 237 张截图均能对应正式轨迹记录。</p>
+<p>本地详细证据位于 <code>optimization_reports/code_audit_20261010/index.html</code>。这些结果对应当时的代码与测试环境，不能自动覆盖后续改动、新车型或新硬件，也不代表软件不存在任何未发现问题。</p>
+<p><strong>2026 年 10 月 17 日补充验证：</strong>113 项 Python 测试、22 项前端检查通过；六次 Studio 完整运行覆盖 20/40 Hz 运动、重放与暂停、程序接管、跟停及横车通行，保存 112 张对齐截图。另一次 40 Hz 诊断因状态查询错误在 9.25 秒提前停止，已单独保留，不计入六次完整运行。非暂停试次的仿真/现实时间比约为 0.79，即 1 秒仿真约耗 1.26 秒现实时间；这不是已达到实时交互的结论。</p>
+<p>独立的 60 Hz 短时诊断仅验证了 CARLA 底层状态采样，四相机仍有缺帧，且未接入浏览器呈现、眼动或实物方向盘。最新报告与证据目录为 <code>F:\Soul_copy\05_simulation\carla_feasibility_20261017</code>：先阅读 <code>report.md</code>，数值见 <code>studio-results.json</code>、<code>native60-results.json</code>，逐项实验要求见 <code>coverage-review.md</code>。这是本机证据路径，迁移电脑时需另行复制归档。</p>
+<p><strong>导出功能后续实测：</strong>60 Hz 的 4 秒脚本保存 241 个车辆状态点，环境重放也保存 241 点；带本地相机窗口的 3 秒脚本保存 181 点和驾驶输入日志。各次运行的 <code>take.json</code> 均显示覆盖计划时长；实测未接入眼动和实物方向盘。以上属于短时功能验证，不代表完整研究平台的显示延迟和长时稳定性已验收。</p>
+<p>正式研究还应单独确认：车型运动校准、地图目标区域、参与者初态、计划使用的输入设备，以及研究指标需要的显示与时间精度。</p>
+<h2 id="15">15 常见问题</h2>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>现象</th>
+<th>处理方法</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>页面提示 CARLA 未连接</td>
+<td>确认 CARLA 已 Play、端口 2000 可用，再点刷新连接</td>
+</tr>
+<tr>
+<td>当前地图不匹配</td>
+<td>在 CARLA 中打开场景指定地图；软件没有地图切换按钮</td>
+</tr>
+<tr>
+<td>世界由其他客户端控制 tick</td>
+<td>停止其他仿真客户端，确认世界恢复异步状态；不应强行与另一同步程序共用</td>
+</tr>
+<tr>
+<td>无法开始录制</td>
+<td>先停止实机预览或上一会话，等清理完成；再处理校验提示</td>
+</tr>
+<tr>
+<td>生成失败或位置被占用</td>
+<td>检查对象是否重叠、Z 是否位于路面，重新吸附并预览</td>
+</tr>
+<tr>
+<td>路线不连通或绕路异常</td>
+<td>删除问题路线点，沿同向且连通的道路重新绘制</td>
+</tr>
+<tr>
+<td>无法拖动车辆</td>
+<td>停止会话，切回运动编排，播放头归零，退出路线模式</td>
+</tr>
+<tr>
+<td>数值被恢复为原值</td>
+<td>输入为空、非数值或超出范围；填写合法数值后再离开输入框</td>
+</tr>
+<tr>
+<td>片段重叠或超出时长</td>
+<td>调整开始时间和持续时间；速度与制动不能重叠；先延长总时长再安排后续片段</td>
+</tr>
+<tr>
+<td>主车或模型校验不通过</td>
+<td>主车改为车辆并初始生成；行人用行人行为，静态道具用静止行为</td>
+</tr>
+<tr>
+<td>轨迹库没有记录</td>
+<td>实机预览不产生 take；物理运行需产生多帧并正常封存，检查运行日志</td>
+</tr>
+<tr>
+<td>接管后按键无响应</td>
+<td>点击驾驶区域，退出输入框或弹窗，重新接管；检查设备映射与输入状态</td>
+</tr>
+<tr>
+<td>雨天画面变化很小</td>
+<td>检查已点击应用或重新运行，再核对地图材质与天空的支持情况</td>
+</tr>
+<tr>
+<td>仿真比现实时间慢</td>
+<td>降低相机负载后重启会话；用仿真时长和现实用时分别评估</td>
+</tr>
+<tr>
+<td>改过地图但编辑器道路仍旧</td>
+<td>同名地图缓存可能未失效；停止会话后由维护者重启编辑服务</td>
+</tr>
+<tr>
+<td>异常关闭后有残留车辆或同步占用</td>
+<td>保留运行编号、日志和状态，让维护者按手册检查；不要批量删除整个 CARLA 世界的对象</td>
+</tr>
+</tbody>
+</table></div>
+<p>报告问题时提供：运行编号、场景名称、具体操作、预期和实际结果，以及 <code>scene.json</code>、<code>status.json</code>、<code>events.json</code>、<code>console.txt</code>。若是画面问题，再提供截图及其 <code>camera_samples</code> 条目。这样维护者能区分编排、控制、地图和显示问题。</p>
+<h2 id="16">16 快捷键与术语速查</h2>
+<p>编辑时：<strong>W</strong>移动、<strong>E</strong>旋转、<strong>F</strong>聚焦、<strong>空格</strong>启停离线预演；<strong>Ctrl+S</strong>保存、<strong>Ctrl+Z</strong>撤销、<strong>Ctrl+Y / Ctrl+Shift+Z</strong>重做。运行中完成手动接管后，W 和空格用于驾驶，详见第 9 节。</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>名称</th>
+<th>本软件中的意思</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>场景 scene</td>
+<td>计划：有哪些参与者、怎样运动、触发哪些事件、使用什么环境</td>
+</tr>
+<tr>
+<td>主车 ego</td>
+<td>可以人工接管、承载主要观察相机的车辆</td>
+</tr>
+<tr>
+<td>片段 clip</td>
+<td>在指定时间区间内执行的动作</td>
+</tr>
+<tr>
+<td>条件事件 event</td>
+<td>条件首次满足时触发的一次动作或标记</td>
+</tr>
+<tr>
+<td>运行 run</td>
+<td>某个场景的一次实际执行，具有独立运行编号</td>
+</tr>
+<tr>
+<td>轨迹录制 take</td>
+<td>正常封存的逐帧状态及元数据，可作为重放基准</td>
+</tr>
+<tr>
+<td>仿真步 tick</td>
+<td>推进一次世界计算</td>
+</tr>
+<tr>
+<td>步长 dt</td>
+<td>一步增加的仿真秒数，默认 0.05</td>
+</tr>
+<tr>
+<td>同步模式</td>
+<td>仿真等待指定客户端发出推进请求</td>
+</tr>
+<tr>
+<td>目标速度</td>
+<td>控制器试图达到的速度</td>
+</tr>
+<tr>
+<td>实际速度</td>
+<td>CARLA 状态或基准录制中真正发生的速度</td>
+</tr>
+<tr>
+<td>运行清单 manifest</td>
+<td>记录版本、指纹和关键设置的追溯文件</td>
+</tr>
+</tbody>
+</table></div>
+<p>需要修改软件时，从<a href="maintenance.html">开发维护手册</a>的接手步骤开始；仅操作实验时，以本手册的流程与实际界面为准。</p>
+<footer class="doc-footer">文档源文件：<code>docs/user-manual.md</code><br>实现说明基线：2026-10-10；最近验证与研究使用边界补充：2026-10-17。生成网页由同一份正文维护。</footer></main></div>
+<dialog id="shot-viewer" class="shot-dialog" aria-labelledby="viewer-title"><div class="viewer-toolbar"><span id="viewer-title">操作截图</span><div><button id="viewer-size" type="button">原始尺寸</button> <button id="viewer-close" type="button" autofocus>关闭 ×</button></div></div><div class="viewer-pan"></div><p class="viewer-note">黄色框与编号对应图下步骤。原始尺寸可横向、纵向滚动；按 Esc 关闭。</p></dialog>
+<script>
+const viewer = document.getElementById('shot-viewer');
+const pan = viewer.querySelector('.viewer-pan');
+const sizeButton = document.getElementById('viewer-size');
+let sourceButton = null;
+document.querySelectorAll('.shot-button').forEach(button => button.addEventListener('click', () => {
+  sourceButton = button;
+  pan.replaceChildren(button.querySelector('.shot-canvas').cloneNode(true));
+  pan.classList.remove('original');
+  sizeButton.textContent = '原始尺寸';
+  document.getElementById('viewer-title').textContent = button.closest('figure').querySelector('figcaption').textContent;
+  viewer.showModal();
+}));
+sizeButton.addEventListener('click', () => {
+  const original = pan.classList.toggle('original');
+  sizeButton.textContent = original ? '适应窗口' : '原始尺寸';
+});
+document.getElementById('viewer-close').addEventListener('click', () => viewer.close());
+viewer.addEventListener('close', () => {pan.replaceChildren(); if(sourceButton) sourceButton.focus();});
+const headings = document.querySelectorAll('main h2[id]');
+if ('IntersectionObserver' in window) {
+  const observer = new IntersectionObserver(entries => {
+    const visible = entries.filter(entry => entry.isIntersecting);
+    if (!visible.length) return;
+    const id = visible[0].target.id;
+    document.querySelectorAll('.toc a').forEach(link => link.classList.toggle('active', decodeURIComponent(link.hash.slice(1)) === id));
+  }, {rootMargin: '-8% 0px -75% 0px'});
+  headings.forEach(heading => observer.observe(heading));
+}
+</script></body></html>

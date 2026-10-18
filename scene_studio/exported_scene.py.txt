@@ -1,0 +1,298 @@
+# -*- coding: utf-8 -*-
+"""HYX Scene Studio export. Run this file with Python 3.10 while CARLA is open.
+
+The scene is embedded below. This file uses the project's CARLA runtime modules,
+just as the older Scene*.py scripts use the project's vehicle and sensor modules.
+No Flask server or eye-tracking receiver is needed for this run.
+"""
+
+import argparse
+import contextlib
+import csv
+import hashlib
+import io
+import json
+import os
+from pathlib import Path
+import signal
+import sys
+import threading
+import time
+import traceback
+import uuid
+
+
+SCENE = json.loads(__HYX_SCENE_LITERAL__)
+INPUT_CONFIG = json.loads(__HYX_INPUT_CONFIG_LITERAL__)
+PROJECT_ROOT_HINT = Path(__HYX_PROJECT_ROOT_LITERAL__)
+
+
+def find_project(explicit=None):
+    script_path = Path(__file__).resolve()
+    choices = [explicit, os.environ.get('HYX_SCENE_ROOT'), *script_path.parents, PROJECT_ROOT_HINT]
+    for candidate in choices:
+        if candidate is None:
+            continue
+        root = Path(candidate).expanduser().resolve()
+        if (root / 'scene_studio' / 'engine.py').is_file():
+            return root
+    raise RuntimeError('找不到 HYX Scene Studio 项目。请用 --project-root 指定项目目录。')
+
+
+class Tee:
+    def __init__(self, *streams):
+        self.streams = streams
+
+    def write(self, message):
+        for stream in self.streams:
+            stream.write(message)
+        return len(message)
+
+    def flush(self):
+        for stream in self.streams:
+            stream.flush()
+
+
+def display_and_drive(folder, worker, config, runtime, close_when_finished=False):
+    """Show the actual CARLA camera and forward local keyboard/joystick input."""
+    import pygame
+
+    pygame.init()
+    pygame.joystick.init()
+    joystick = None
+    if config['source'] != 'keyboard':
+        if pygame.joystick.get_count() <= config['index']:
+            raise RuntimeError('未检测到所选方向盘/手柄；可用 --input keyboard 改用键盘。')
+        joystick = pygame.joystick.Joystick(config['index'])
+        joystick.init()
+
+    width = min(SCENE['camera']['width'], 1280)
+    height = min(SCENE['camera']['height'], 720)
+    screen = pygame.display.set_mode((width, height), pygame.RESIZABLE)
+    pygame.display.set_caption('HYX CARLA · ' + SCENE['name'])
+    # Windows font registries can contain non-string entries; use Pygame's
+    # bundled font because the driving overlay only contains ASCII text.
+    font = pygame.font.Font(None, 22)
+    clock = pygame.time.Clock()
+    picture = None
+    last_frame_mtime = -1
+    last_input_at = 0
+    sequence = 0
+    epoch = None
+    command_index = 0
+    completed = False
+
+    def command(kind):
+        nonlocal command_index
+        command_index += 1
+        name = f'{time.time_ns()}_{command_index:04d}.json'
+        path = folder / 'commands' / name
+        value = {'type': kind, 'run_id': folder.name}
+        if kind == 'takeover':
+            value['owner'] = config['source']
+        path.write_text(json.dumps(value, ensure_ascii=False), encoding='utf-8')
+
+    def axis(index):
+        return joystick.get_axis(index) if joystick and index < joystick.get_numaxes() else 0.0
+
+    def pedal(prefix):
+        index = config[prefix + 'Index']
+        if config[prefix + 'Mode'] == 'button':
+            raw = joystick.get_button(index) if index < joystick.get_numbuttons() else 0
+            return raw, float(raw)
+        raw = axis(index)
+        rest, full = config[prefix + 'Rest'], config[prefix + 'Full']
+        value = 0.0 if abs(full - rest) < .01 else max(0, min(1, (raw - rest) / (full - rest)))
+        return raw, value
+
+    fields = ['wall_monotonic_ns', 'sim_time', 'frame_index', 'owner', 'source',
+              'raw_steer', 'raw_throttle', 'raw_brake', 'steer', 'throttle', 'brake', 'epoch', 'seq']
+    with (folder / 'driver_input.csv').open('w', newline='', encoding='utf-8') as stream:
+        writer = csv.DictWriter(stream, fieldnames=fields)
+        writer.writeheader()
+        try:
+            while True:
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT:
+                        if worker.is_alive():
+                            runtime.request_stop()
+                        return
+                    if event.type == pygame.KEYDOWN:
+                        if event.key == pygame.K_m and worker.is_alive():
+                            command('takeover')
+                        elif event.key == pygame.K_r and worker.is_alive():
+                            command('release')
+                        elif event.key in (pygame.K_ESCAPE, pygame.K_q):
+                            if worker.is_alive():
+                                runtime.request_stop()
+                            return
+                        elif completed:
+                            return
+
+                status_path = folder / 'status.json'
+                try:
+                    status = json.loads(status_path.read_text(encoding='utf-8'))
+                except (OSError, ValueError):
+                    status = {}
+                control = status.get('control') or {}
+                owner = control.get('owner', 'auto')
+                sample_at = time.monotonic()
+                if worker.is_alive() and sample_at - last_input_at >= .05:
+                    last_input_at = sample_at
+                    if joystick:
+                        raw_steer = axis(config['steerAxis'])
+                        centered = raw_steer - config['steerCenter']
+                        dead = config['deadzone']
+                        steer = 0.0 if abs(centered) < dead else (1 if centered > 0 else -1) * (abs(centered) - dead) / max(.01, config['steerSpan'] - dead)
+                        if config['invert']:
+                            steer = -steer
+                        raw_throttle, throttle = pedal('throttle')
+                        raw_brake, brake = pedal('brake')
+                    else:
+                        pressed = pygame.key.get_pressed()
+                        raw_steer = int(pressed[pygame.K_d]) - int(pressed[pygame.K_a])
+                        raw_throttle = int(pressed[pygame.K_w])
+                        raw_brake = int(pressed[pygame.K_s] or pressed[pygame.K_SPACE])
+                        steer, throttle, brake = raw_steer * .6, raw_throttle * .75, float(raw_brake)
+                    steer = max(-1, min(1, steer))
+                    if owner == config['source'] and control.get('epoch') is not None:
+                        if epoch != control['epoch']:
+                            epoch, sequence = control['epoch'], 0
+                        sequence += 1
+                        packet = {'run_id': folder.name, 'epoch': epoch, 'seq': sequence,
+                                  'steer': steer, 'throttle': throttle, 'brake': brake}
+                        temp = folder / 'input.tmp'
+                        temp.write_text(json.dumps(packet), encoding='utf-8')
+                        os.replace(temp, folder / 'input.json')
+                    writer.writerow({'wall_monotonic_ns': time.monotonic_ns(),
+                                     'sim_time': status.get('elapsed'), 'frame_index': status.get('frame_index'),
+                                     'owner': owner, 'source': config['source'],
+                                     'raw_steer': raw_steer, 'raw_throttle': raw_throttle, 'raw_brake': raw_brake,
+                                     'steer': steer, 'throttle': throttle, 'brake': brake,
+                                     'epoch': epoch if owner == config['source'] else '',
+                                     'seq': sequence if owner == config['source'] else ''})
+                    stream.flush()
+
+                image_path = folder / 'frame.jpg'
+                try:
+                    modified = image_path.stat().st_mtime_ns
+                    if modified != last_frame_mtime:
+                        picture = pygame.image.load(io.BytesIO(image_path.read_bytes()), 'frame.jpg').convert()
+                        last_frame_mtime = modified
+                except (OSError, pygame.error):
+                    pass
+                screen.fill((17, 25, 34))
+                if picture:
+                    screen.blit(pygame.transform.smoothscale(picture, screen.get_size()), (0, 0))
+                else:
+                    screen.blit(font.render('Waiting for CARLA camera...', True, (255, 255, 255)), (20, 20))
+                completed = not worker.is_alive()
+                if completed and close_when_finished:
+                    return
+                caption = ('Finished · press any key to close' if completed else
+                           f'{status.get("elapsed", 0):.2f}s  {owner.upper()}  M: manual  R: auto  WASD: drive  Q: stop')
+                label = font.render(caption, True, (255, 255, 255))
+                pygame.draw.rect(screen, (8, 20, 28), (0, 0, screen.get_width(), 34))
+                screen.blit(label, (10, 7))
+                pygame.display.flip()
+                clock.tick(30)
+        finally:
+            pygame.quit()
+
+
+def main():
+    parser = argparse.ArgumentParser(description='运行导出的 HYX CARLA 场景并记录车辆数据')
+    parser.add_argument('--project-root', type=Path, help='移动项目后可指定 HYX Scene Studio 项目目录')
+    parser.add_argument('--no-window', action='store_true', help='不打开驾驶画面；用于批量运行或自动验收')
+    parser.add_argument('--close-when-finished', action='store_true', help='场景结束时自动关闭驾驶画面')
+    parser.add_argument('--input', choices=('keyboard', 'gamepad', 'wheel'), help='覆盖导出时保存的驾驶输入设备')
+    args = parser.parse_args()
+
+    try:
+        root = find_project(args.project_root)
+        sys.path.insert(0, str(root))
+        from scene_studio.schema import validate
+        from scene_studio.engine import Session
+        import scene_runtime as runtime
+        scene = validate(SCENE)
+    except Exception as exc:
+        print('无法启动导出的场景：', exc, file=sys.stderr)
+        return 1
+
+    runs = root / 'studio_data' / 'runs'
+    runs.mkdir(parents=True, exist_ok=True)
+    folder = runs / ('py_' + time.strftime('%Y%m%d_%H%M%S') + '_' + uuid.uuid4().hex[:6])
+    folder.mkdir()
+    (folder / 'commands').mkdir()
+    (folder / 'scene.json').write_text(json.dumps(scene, ensure_ascii=False, indent=2, allow_nan=False), encoding='utf-8')
+    (folder / 'launcher_manifest.json').write_text(json.dumps({
+        'source_script': str(Path(__file__).resolve()),
+        'source_script_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+        'scene_id': scene['id'], 'dt': scene['dt'], 'input_config': INPUT_CONFIG,
+        'note': '车辆、事件、相机记录由 scene_studio.engine 直接连接 CARLA 生成；此启动器不采集眼动。',
+    }, ensure_ascii=False, indent=2), encoding='utf-8')
+
+    old_int = signal.getsignal(signal.SIGINT)
+    signal.signal(signal.SIGINT, lambda *_: runtime.request_stop())
+    with (folder / 'console.txt').open('w', encoding='utf-8', buffering=1) as log:
+        with contextlib.redirect_stdout(Tee(sys.stdout, log)), contextlib.redirect_stderr(Tee(sys.stderr, log)):
+            print('场景：', scene['name'])
+            print('车辆记录目录：', folder)
+            print('连接 CARLA 127.0.0.1:2000；按 Ctrl+C 可提前结束并保存已录数据。')
+            try:
+                if scene['mode'] == 'environment' and not (runs / scene['locked_take'] / 'take.json').is_file():
+                    raise RuntimeError('环境重放需要同一运行库中的基准轨迹：' + scene['locked_take'])
+                if args.no_window:
+                    Session(scene, folder).run()
+                else:
+                    errors = []
+                    def run_scene():
+                        try:
+                            Session(scene, folder).run()
+                        except Exception as exc:
+                            errors.append(exc)
+                            traceback.print_exc()
+                    worker = threading.Thread(target=run_scene, name='carla-scene')
+                    worker.start()
+                    try:
+                        config = dict(INPUT_CONFIG)
+                        if args.input:
+                            config['source'] = args.input
+                        display_and_drive(folder, worker, config, runtime, args.close_when_finished)
+                    finally:
+                        if worker.is_alive():
+                            runtime.request_stop()
+                        worker.join(timeout=20)
+                    if worker.is_alive():
+                        raise RuntimeError('CARLA 工作线程未停止；请检查运行目录和世界状态')
+                    if errors:
+                        raise errors[0]
+                result = json.loads((folder / 'status.json').read_text(encoding='utf-8'))
+                if result['state'] != 'finished':
+                    raise RuntimeError(result.get('error') or '场景运行未正常结束')
+                take = json.loads((folder / 'take.json').read_text(encoding='utf-8'))
+                if take.get('covers_scene_duration'):
+                    print('已完成计划时长。车辆数据：', folder / 'telemetry.csv')
+                else:
+                    print('场景已提前结束，数据未覆盖计划时长：', folder / 'telemetry.csv')
+                print('事件记录：', folder / 'events.json')
+                return 0
+            except Exception as exc:
+                traceback.print_exc()
+                status_path = folder / 'status.json'
+                try:
+                    state = json.loads(status_path.read_text(encoding='utf-8'))
+                except (OSError, ValueError):
+                    state = {'run_id': folder.name}
+                state.update(state='error', error=str(exc))
+                temp = folder / 'launcher_status.tmp'
+                temp.write_text(json.dumps(state, ensure_ascii=False), encoding='utf-8')
+                os.replace(temp, status_path)
+                print('运行失败，诊断信息已写入：', folder / 'console.txt')
+                return 1
+            finally:
+                signal.signal(signal.SIGINT, old_int)
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

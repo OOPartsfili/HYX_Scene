@@ -9,14 +9,16 @@ import threading
 import time
 import uuid
 import mimetypes
+from urllib.parse import urlsplit
 from collections import defaultdict
 from flask import Flask,Response,jsonify,request,send_from_directory
 import carla
 from scene_studio.schema import validate,LOOKS,ACTIONS,TRIGGERS
-from scene_studio.schema import number
+from scene_studio.schema import number,object_value,boolean
 from scene_studio.timeline import PRESETS,apply_behavior_preset,motion_hash
 from scene_studio.planning import Planner
 from scene_studio.recording import Recording
+from scene_studio.export_python import render_python
 
 # Windows registry may incorrectly register .js as text/plain.
 mimetypes.add_type('text/javascript','.js')
@@ -40,17 +42,23 @@ def connection():
 
 def atomic(path,value):
     tmp=path.with_name(path.name+'.'+uuid.uuid4().hex+'.tmp');tmp.write_text(json.dumps(value,ensure_ascii=False,indent=2,allow_nan=False),encoding='utf-8')
-    for attempt in range(20):
-        try:os.replace(tmp,path);return
-        except PermissionError:
-            if attempt==19:raise
-            time.sleep(.01)
+    try:
+        for attempt in range(20):
+            try:os.replace(tmp,path);return
+            except PermissionError:
+                if attempt==19:raise
+                time.sleep(.01)
+    finally:
+        if tmp.exists():tmp.unlink()
+
+
+def payload():return object_value(request.get_json(),'请求内容')
 
 
 @app.before_request
 def local_only():
     if request.remote_addr not in ('127.0.0.1','::1'):return jsonify(error='仅允许本机访问'),403
-    if request.host.split(':')[0] not in ('127.0.0.1','localhost','[::1]'):return jsonify(error='需要本机地址'),403
+    if urlsplit(request.host_url).hostname not in ('127.0.0.1','localhost','::1'):return jsonify(error='需要本机地址'),403
     if request.method in ('POST','PUT','DELETE'):
         origin=request.headers.get('Origin')
         if origin and origin!=request.host_url.rstrip('/'):return jsonify(error='来源不匹配'),403
@@ -111,8 +119,8 @@ def blueprints():
 @app.post('/api/snap')
 def snap():
     from scene_studio.schema import number
-    p=request.get_json();x=number(p.get('x'),-100000,100000,'x');y=number(p.get('y'),-100000,100000,'y')
-    _,w=connection();wp=w.get_map().get_waypoint(carla.Location(x=x,y=y,z=float(p.get('z',0))))
+    p=payload();x=number(p.get('x'),-100000,100000,'x');y=number(p.get('y'),-100000,100000,'y');z=number(p.get('z',0),-100000,100000,'z')
+    _,w=connection();wp=w.get_map().get_waypoint(carla.Location(x=x,y=y,z=z))
     if not wp:raise ValueError('附近没有可驾驶车道')
     t=wp.transform
     return jsonify(x=t.location.x,y=t.location.y,z=t.location.z+.25,yaw=t.rotation.yaw,road=wp.road_id,lane=wp.lane_id,distance=((x-t.location.x)**2+(y-t.location.y)**2)**.5)
@@ -140,10 +148,11 @@ def get_scene(sid):return jsonify(validate(json.loads(scene_path(sid).read_text(
 def save_scene():
     s=validate(request.get_json());p=scene_path(s['id'])
     verify_locked(s)
-    if p.exists():
-        history=DATA/'history';history.mkdir(exist_ok=True)
-        (history/(s['id']+'_'+str(time.time_ns())+'.json')).write_bytes(p.read_bytes())
-    atomic(p,s)
+    with LOCK:
+        if p.exists():
+            history=DATA/'history';history.mkdir(exist_ok=True)
+            (history/(s['id']+'_'+str(time.time_ns())+'.json')).write_bytes(p.read_bytes())
+        atomic(p,s)
     return jsonify(saved=True,id=s['id'],scene=s)
 
 
@@ -167,10 +176,10 @@ def verify_locked(scene):
 
 def compiled(scene):
     global PLANNER,PLANNER_MAP
+    _,w=connection();m=w.get_map()
+    if m.name!=scene['map']:raise ValueError('当前地图与场景地图不同')
     key=motion_hash(scene)
     if key not in PLAN_CACHE:
-        _,w=connection();m=w.get_map()
-        if m.name!=scene['map']:raise ValueError('当前地图与场景地图不同')
         if PLANNER is None or PLANNER_MAP!=m.name:PLANNER=Planner(m);PLANNER_MAP=m.name
         result=PLANNER.compile(scene)
         if len(PLAN_CACHE)>=6:PLAN_CACHE.pop(next(iter(PLAN_CACHE)))
@@ -192,20 +201,36 @@ def plan():
 
 @app.post('/api/preset')
 def apply_preset():
-    p=request.get_json();s=validate(p['scene'])
+    p=payload();s=validate(p['scene'])
     if s['mode']=='environment':raise ValueError('固定轨迹模式不能修改行为预设')
     s,replaced=apply_behavior_preset(s,p['actor'],p['preset'],p.get('target'))
     return jsonify(scene=validate(s),replaced_actions=replaced)
 
 
+def ordered_run_folders():
+    """Newest sessions first, independent of editor/batch run-name prefixes."""
+    def started(folder):
+        try:
+            manifest=json.loads((folder/'run_manifest.json').read_text(encoding='utf-8'))
+            stamp=manifest.get('started_unix_ns') if isinstance(manifest,dict) else None
+            if type(stamp) is int and stamp>0:return stamp,folder.name
+        except (OSError,ValueError):pass
+        # Older recordings have no manifest. Their scene snapshot is written at startup.
+        for path in (folder/'scene.json',folder):
+            try:return path.stat().st_mtime_ns,folder.name
+            except OSError:pass
+        return 0,folder.name
+    return sorted((p for p in RUNS.iterdir() if p.is_dir()),key=started,reverse=True)
+
+
 @app.get('/api/takes')
 def takes():
     result=[]
-    for p in sorted(RUNS.glob('*/take.json'),reverse=True):
+    for folder in ordered_run_folders():
         try:
-            h=json.loads(p.read_text(encoding='utf-8'))
+            h=json.loads((folder/'take.json').read_text(encoding='utf-8'))
             if h.get('complete'):result.append({'id':h['id'],'name':h['scene']['name'],'duration':h['duration'],'frames':h['frame_count'],'dt':h['dt'],'manual_override':h['manual_override'],'mode':h['scene']['mode']})
-        except (OSError,ValueError):pass
+        except (OSError,ValueError,KeyError,TypeError,AttributeError):pass
         if len(result)>=60:break
     return jsonify(result)
 
@@ -239,10 +264,15 @@ def current_scene():
 @app.post('/api/start')
 def start():
     global CURRENT,PROCESS,LOG
-    payload=request.get_json();s=validate(payload['scene'])
+    value=payload();s=validate(value['scene']);preview=boolean(value.get('preview',False),'预览模式')
     verify_locked(s)
     with LOCK:
-        if PROCESS and PROCESS.poll() is None:raise ValueError('已有预览或运行，请先停止')
+        if PROCESS and PROCESS.poll() is None:
+            if state()['state'] not in ('finished','error'):raise ValueError('已有预览或运行，请先停止')
+            # A worker publishes its terminal status just before Python exits.
+            # Reap that same worker before opening a new simulation session.
+            try:PROCESS.wait(timeout=5)
+            except subprocess.TimeoutExpired:raise ValueError('上一场运行仍在收尾，请稍后再启动')
         _,w=connection()
         if w.get_map().name!=s['map']:raise ValueError('地图不匹配，编辑器不会自动切换你的地图')
         if w.get_settings().synchronous_mode:raise ValueError('请使用异步世界；当前由其他客户端控制 tick')
@@ -255,18 +285,40 @@ def start():
         if LOG:LOG.close()
         LOG=(CURRENT/'console.txt').open('w',encoding='utf-8')
         command=[sys.executable,'-u','-m','scene_studio.engine',str(CURRENT)]
-        if payload.get('preview'):command.append('--preview')
+        if preview:command.append('--preview')
         env=os.environ.copy();env['PYTHONIOENCODING']='utf-8'
-        PROCESS=subprocess.Popen(command,cwd=ROOT,env=env,stdout=LOG,stderr=subprocess.STDOUT,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+        try:
+            PROCESS=subprocess.Popen(command,cwd=ROOT,env=env,stdout=LOG,stderr=subprocess.STDOUT,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+        except Exception as exc:
+            PROCESS=None;LOG.close();LOG=None
+            atomic(CURRENT/'status.json',{'state':'error','error':'无法启动工作进程：'+str(exc),'actors':{},'events':[]})
+            raise
         return jsonify(run_id=run_id,state='starting')
+
+
+@app.post('/api/export-python')
+def export_python():
+    value=payload()
+    hz=value.get('hz')
+    if type(hz) is not int or hz not in (10,20,40,60):raise ValueError('导出频率需为 10、20、40 或 60 Hz')
+    draft=copy.deepcopy(value['scene'])
+    draft['dt']=1/hz
+    scene=validate(draft)
+    verify_locked(scene)
+    code=render_python(scene,ROOT,value.get('input_config'))
+    response=Response(code,content_type='text/x-python; charset=utf-8')
+    response.headers['Content-Disposition']=f'attachment; filename="HYX_{scene["id"]}_{hz}Hz.py"'
+    response.headers['Cache-Control']='no-store'
+    return response
 
 
 @app.post('/api/command')
 def command():
-    value=request.get_json()
+    value=payload()
     if value.get('type') not in ('stop','pause','resume','camera','look','action','transform','manual','takeover','release','seek'):raise ValueError('不支持的命令')
     with LOCK:
         if not PROCESS or PROCESS.poll() is not None:raise ValueError('没有正在运行的场景')
+        if 'run_id' in value and value['run_id']!=CURRENT.name:raise ValueError('命令属于另一场运行，请刷新运行状态')
         # Validate incoming look/action edits using the same full document rules.
         scene=json.loads((CURRENT/'scene.json').read_text(encoding='utf-8'))
         if scene['mode']=='environment' and value['type'] in ('action','transform'):raise ValueError('固定轨迹模式不能修改车辆行为或位置')
@@ -274,8 +326,10 @@ def command():
         if value['type']=='seek':value['time']=number(value.get('time'),0,scene['duration'],'预演时间')
         if value['type'] in ('camera','transform'):
             if value.get('actor',scene['ego']) not in {a['id'] for a in scene['actors']}:raise ValueError('参与者不存在')
+            value.setdefault('actor',scene['ego'])
         if value['type']=='camera' and value.get('view','driver') not in ('driver','chase','top'):raise ValueError('相机视角无效')
         if value['type']=='transform':
+            object_value(value.get('pose'),'参与者位置')
             for key in ('x','y','z','yaw'):value['pose'][key]=number(value['pose'].get(key),-100000,100000,key)
         if value['type']=='manual':
             for key,low in [('steer',-1),('throttle',0),('brake',0)]:value[key]=number(value.get(key,0),low,1,key)
@@ -288,7 +342,7 @@ def command():
 
 @app.post('/api/input')
 def manual_input():
-    value=request.get_json()
+    value=payload()
     with LOCK:
         if not PROCESS or PROCESS.poll() is not None or not CURRENT:raise ValueError('没有正在运行的场景')
         if value.get('run_id')!=CURRENT.name:raise ValueError('输入属于另一场运行')
@@ -327,18 +381,19 @@ def video():
 @app.get('/api/runs')
 def runs():
     out=[]
-    for p in sorted(RUNS.iterdir(),reverse=True)[:40]:
+    for p in ordered_run_folders():
         try:
             s=json.loads((p/'scene.json').read_text(encoding='utf-8'));status=json.loads((p/'status.json').read_text(encoding='utf-8'))
             out.append({'id':p.name,'name':s['name'],'state':status['state'],'elapsed':status.get('elapsed',0),'error':status.get('error'),'has_take':(p/'take.json').exists(),'mode':s.get('mode','legacy'),'manual_override':status.get('trajectory_status')=='manual_override'})
-        except (OSError,ValueError):pass
+        except (OSError,ValueError,KeyError,TypeError):pass
+        if len(out)>=40:break
     return jsonify(out)
 
 
 @app.get('/api/runs/<rid>/<filename>')
 def run_file(rid,filename):
     import re
-    if not re.fullmatch('[A-Za-z0-9_-]+',rid) or filename not in ('telemetry.csv','events.json','scene.json','console.txt','frame.jpg','status.json','take.json','trajectory.jsonl','plan.json') and not re.fullmatch(r'shot_[0-9]{7}\.jpg',filename):raise ValueError('文件名无效')
+    if not re.fullmatch('[A-Za-z0-9_-]+',rid) or filename not in ('telemetry.csv','events.json','scene.json','console.txt','frame.jpg','status.json','take.json','trajectory.jsonl','plan.json','run_manifest.json') and not re.fullmatch(r'shot_[0-9]{7}\.jpg',filename):raise ValueError('文件名无效')
     return send_from_directory(RUNS/rid,filename,as_attachment=filename!='frame.jpg')
 
 

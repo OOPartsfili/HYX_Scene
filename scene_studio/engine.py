@@ -6,10 +6,12 @@ any automated controller. Each process owns and cleans up only its own actors.
 import argparse
 import copy
 import csv
+import hashlib
 import json
 import math
 from pathlib import Path
 import threading
+import sys
 import time
 import traceback
 from types import SimpleNamespace
@@ -23,7 +25,7 @@ from scene_studio.runner import Session as LegacySession,Driver as LegacyDriver,
 from scene_studio.schema import validate,look_values,triggered
 from scene_studio.timeline import ControlOwner,motion_at,pose_on_path
 from scene_studio.recording import Recording,RecordingWriter
-from scene_studio.planning import Planner
+from scene_studio.planning import Planner,plan_is_current
 from traffic_math import follow_speed
 
 WEATHER_KEYS=('cloudiness','precipitation','precipitation_deposits','wind_intensity','sun_azimuth_angle','sun_altitude_angle','fog_density','fog_distance','fog_falloff','wetness','scattering_intensity','mie_scattering_scale','rayleigh_scattering_scale','dust_storm')
@@ -37,6 +39,7 @@ class StudioDriver(LegacyDriver):
         self.spec=spec;self.track=track;self._thread=None
         self.route=[SimpleNamespace(transform=carla.Transform(carla.Location(x=p[1],y=p[2],z=p[3]),carla.Rotation(yaw=p[4]))) for p in track['path']]
         self.timeline=bool(spec.get('clips'));self.timeline_follow=False
+        self.timeline_lights_before=None
     def follow_road(self):
         # Legacy lane-change helpers call this method; never create a second writer.
         return
@@ -67,7 +70,11 @@ class StudioDriver(LegacyDriver):
             if lead is not self._lead:self._history.clear()
             self._lead=lead;self._reaction_time=follow['reaction'];self._min_gap=follow['gap'];self._headway=follow['headway'];self.timeline_follow=True
         elif self.timeline_follow:self._lead=None;self._history.clear();self.timeline_follow=False
-        if value['lights'] is not None:self.vice_car.set_light_state(carla.VehicleLightState(value['lights']))
+        if value['lights'] is not None:
+            if self.timeline_lights_before is None:self.timeline_lights_before=self.vice_car.get_light_state()
+            self.vice_car.set_light_state(carla.VehicleLightState(value['lights']))
+        elif self.timeline_lights_before is not None:
+            self.vice_car.set_light_state(self.timeline_lights_before);self.timeline_lights_before=None
         return value['active']
 
 class Session(LegacySession):
@@ -82,10 +89,14 @@ class Session(LegacySession):
             self.recording=Recording(folder.parent/self.scene['locked_take']);self.recording.verify(self.scene)
             self.baseline_weather=self.recording.header['weather']
         planfile=folder/'plan.json'
-        self.plan=json.loads(planfile.read_text(encoding='utf-8')) if planfile.exists() else Planner(self.map).compile(self.scene)
+        self.plan=json.loads(planfile.read_text(encoding='utf-8')) if planfile.exists() else None
+        if not plan_is_current(self.plan,self.scene):
+            self.plan=Planner(self.map).compile(self.scene);atomic_json(planfile,self.plan)
         self.specs={a['id']:a for a in self.scene['actors']}
         self.end_time=self.recording.header['duration'] if self.recording else self.scene['duration']
         self.saved_velocities={};self.last_controls={};self.last_source={};self.render_ticks=0
+        self.last_shot_second=-1;self.camera_samples=[];self.unmapped_camera_frames=0
+        self.first_recorded_frame=None;self.initial_snapshot=None;self.recordable_frames=set()
 
     def spawn(self,spec,pose=None):
         aid=spec['id']
@@ -114,7 +125,25 @@ class Session(LegacySession):
         if spec['model'].startswith(('vehicle.','walker.')):
             sensor=self.world.spawn_actor(self.world.get_blueprint_library().find('sensor.other.collision'),carla.Transform(),attach_to=actor)
             self.owned.append(sensor);runtime.register(OwnedActor(sensor),'destroy')
-            sensor.listen(lambda e,aid=aid:self.collisions.append({'time':self.elapsed,'frame':e.frame,'actor':aid,'other':e.other_actor.type_id,'other_id':e.other_actor.id,'impulse':[e.normal_impulse.x,e.normal_impulse.y,e.normal_impulse.z]}))
+            sensor.listen(lambda e,aid=aid:self.on_collision(e,aid))
+
+    def on_collision(self,event,aid):
+        if self.closed:return
+        self.collisions.append({'time':self.frame_times_map.get(event.frame),'frame':event.frame,
+            'actor':aid,'other':event.other_actor.type_id,'other_id':event.other_actor.id,
+            'impulse':[event.normal_impulse.x,event.normal_impulse.y,event.normal_impulse.z]})
+
+    def close_camera(self):
+        camera=self.camera
+        if camera is None:return
+        errors=[]
+        try:camera.stop()
+        except Exception as e:errors.append('stop: '+str(e))
+        try:
+            if camera.is_alive and camera.destroy() is False:raise RuntimeError('destroy returned False')
+        except Exception as e:errors.append('destroy: '+str(e))
+        if not camera.is_alive:self.camera=None
+        if errors:raise RuntimeError('; '.join(errors))
 
     def apply_look(self,look):
         self.scene['look']=copy.deepcopy(look);values=look_values(look)
@@ -126,7 +155,7 @@ class Session(LegacySession):
 
     def make_camera(self,target=None,view=None):
         self.camera_generation+=1;generation=self.camera_generation
-        if self.camera:self.camera.stop();self.camera.destroy();self.camera=None
+        self.close_camera()
         target=target or getattr(self,'camera_target',self.scene['ego']);self.camera_target=target
         if target not in self.actors:return
         cfg=self.scene['camera'];view=view or cfg.get('view','driver');cfg['view']=view
@@ -139,32 +168,68 @@ class Session(LegacySession):
         elif view=='chase':tf=carla.Transform(carla.Location(x=-8,z=4),carla.Rotation(pitch=-12))
         else:tf=carla.Transform(carla.Location(x=1.4,y=-.18,z=1.04))
         self.camera=self.world.spawn_actor(bp,tf,attach_to=self.actors[target])
+        self.owned.append(self.camera);runtime.register(OwnedActor(self.camera),'destroy')
         self.camera.listen(lambda im:self.on_frame(im,generation))
+
+    def camera_frame_in_trial(self,frame):
+        # Preview can seek freely. Trial images must belong to a frame at or
+        # after the very same snapshot used for the first telemetry row.
+        return self.preview or self.first_recorded_frame is not None and frame>=self.first_recorded_frame
 
     def on_frame(self,image,generation):
         if self.closed or generation!=self.camera_generation:return
+        if not self.camera_frame_in_trial(image.frame):return
+        t=self.frame_times_map.get(image.frame)
+        if t is None:
+            # Late/unowned frames cannot be assigned the callback's current
+            # elapsed time: that would mislabel research screenshots.
+            self.unmapped_camera_frames+=1;return
         arr=np.frombuffer(image.raw_data,np.uint8).reshape(image.height,image.width,4)[:,:,:3]
         ok,data=cv2.imencode('.jpg',arr,[cv2.IMWRITE_JPEG_QUALITY,88])
         if not ok or self.closed or generation!=self.camera_generation:return
-        t=self.frame_times_map.get(image.frame,self.elapsed)
-        self.camera_time=t
         with self.image_lock:
+            if self.closed or generation!=self.camera_generation:return
+            if not self.camera_frame_in_trial(image.frame):return
+            self.camera_time=t
             temp=self.folder/'frame.tmp';temp.write_bytes(data.tobytes())
             try:temp.replace(self.folder/'frame.jpg')
             except PermissionError:pass
-            # Comparable stills at exact scene seconds; never advance scene time here.
-            if not self.preview and abs(t-round(t))<self.dt/4:
-                (self.folder/f'shot_{round(t*1000):07d}.jpg').write_bytes(data.tobytes())
+            # Sensor periods can have a half-step phase relative to scene t=0.
+            # Save the first available image each second with its ACTUAL time,
+            # rather than requiring an exact integer-time coincidence.
+            second=int(math.floor(t+1e-6))
+            # Eligibility belongs to the captured frame, not to the status at
+            # callback arrival: paused frames may arrive after resume, and
+            # recorded frames may arrive after pause.
+            if not self.preview and image.frame in self.recordable_frames and second>self.last_shot_second:
+                name=f'shot_{round(t*1000):07d}.jpg'
+                (self.folder/name).write_bytes(data.tobytes())
+                self.camera_samples.append({'file':name,'time':t,'frame':image.frame})
+                self.last_shot_second=second
         now=time.perf_counter();self.frame_count+=1;self.frame_times.append(now);self.frame_times=self.frame_times[-100:];self.last_image_time=now
 
-    def tick(self):
+    def tick(self,record_frame=False):
         expected=self.world.get_snapshot().frame+1;self.frame_times_map[expected]=self.elapsed
+        # Decide before advancing: camera callbacks may precede CSV writes.
+        if record_frame and not self.preview:self.recordable_frames.add(expected)
         frame=self.world.tick(10)
         if frame!=expected:raise RuntimeError('检测到其他客户端同时推进仿真，已停止以保护时间轴')
-        if len(self.frame_times_map)>250:self.frame_times_map.pop(min(self.frame_times_map))
+        if len(self.frame_times_map)>250:
+            expired=min(self.frame_times_map);self.frame_times_map.pop(expired);self.recordable_frames.discard(expired)
         return self.world.get_snapshot()
 
     def start(self):
+        root=Path(__file__).resolve().parents[1]
+        sources=('engine.py','runner.py','schema.py','timeline.py','recording.py','planning.py','routing.py')
+        files=['scene_studio/'+name for name in sources]+['optimized_control.py','traffic_math.py','scene_runtime.py',
+            'optimization_config.py','agents/navigation/controller.py','agents/navigation/global_route_planner.py','agents/tools/misc.py']
+        atomic_json(self.folder/'run_manifest.json',{
+            'python':sys.version,'carla_client':self.client.get_client_version(),'carla_server':self.client.get_server_version(),
+            'map':self.map.name,'xodr_sha256':hashlib.sha256(self.map.to_opendrive().encode()).hexdigest(),
+            'code_sha256':{name:hashlib.sha256((root/name).read_bytes()).hexdigest() for name in files},
+            'scene_sha256':hashlib.sha256(json.dumps(self.scene,sort_keys=True,separators=(',',':'),ensure_ascii=False).encode()).hexdigest(),
+            'dt':self.dt,'seed':self.scene['seed'],'mode':self.scene['mode'],'started_unix_ns':time.time_ns(),
+            'timing_note':'轨迹时间为仿真时间；相机帧号对应采样时刻，不是被试屏幕呈现时刻'})
         settings=self.world.get_settings();settings.synchronous_mode=True;settings.fixed_delta_seconds=self.dt
         settings.substepping=True;settings.max_substep_delta_time=.01;settings.max_substeps=max(10,math.ceil(self.dt/.01))
         self.world.apply_settings(settings)
@@ -176,15 +241,30 @@ class Session(LegacySession):
                 if a['spawn_at_start']:self.spawn(a)
         self.apply_look(self.scene['look']);self.make_camera(self.scene['ego'])
         # Settle spawned physical vehicles before establishing t=0; no time-axis motion.
-        for _ in range(10):self.tick()
+        for _ in range(20):self.tick()
         if not self.preview and not self.recording:
+            moving=[]
             for aid,d in self.drivers.items():
                 if d.spec['behavior']!='parked' and d.start_in_motion and d.speed_limit>0:
-                    f=self.actors[aid].get_transform().get_forward_vector();speed=d.speed_limit/3.6
-                    self.actors[aid].set_target_velocity(carla.Vector3D(x=f.x*speed,y=f.y*speed,z=f.z*speed));d._command_speed=speed
+                    self.actors[aid].apply_control(carla.VehicleControl())
+                    moving.append((aid,d))
+            # Release the settling brake before seeding initial velocity: these
+            # commands otherwise share a frame with the previous full brake.
+            for _ in range(3):self.tick()
+            for aid,d in moving:
+                f=self.actors[aid].get_transform().get_forward_vector();speed=d.speed_limit/3.6
+                self.actors[aid].set_target_velocity(carla.Vector3D(x=f.x*speed,y=f.y*speed,z=f.z*speed))
+            # Publish the initial velocity and neutral steering before t=0.
+            # Controllers are constructed before the newly spawned actor has
+            # appeared in a world snapshot; get_control() there is not a valid
+            # steering baseline and can produce a spurious first-frame turn.
+            for _ in range(2):self.tick()
+            for aid,d in self.drivers.items():
+                d.rejoin()
         self.status='preview' if self.preview else 'running'
         if not self.preview:self.recorder=RecordingWriter(self.folder,copy.deepcopy(self.scene),self.baseline_weather)
-        self.snapshot(self.world.get_snapshot())
+        self.initial_snapshot=self.world.get_snapshot()
+        self.snapshot(self.initial_snapshot)
 
     def snapshot(self,snapshot):
         self.states={}
@@ -340,9 +420,14 @@ class Session(LegacySession):
             self.start()
             writer_file=(self.folder/'telemetry.csv').open('w',newline='',encoding='utf-8')
             writer=csv.DictWriter(writer_file,fieldnames=['time','frame','owner','id','carla_id','x','y','z','yaw','pitch','roll','speed','speed_source','steer','throttle','brake','lights']);writer.writeheader()
-            if self.recording:self.apply_replay(0);self.snapshot(self.tick())
+            initial_snapshot=self.initial_snapshot
+            if self.recording:
+                self.apply_replay(0);initial_snapshot=self.tick();self.snapshot(initial_snapshot)
+            with self.image_lock:
+                self.first_recorded_frame=initial_snapshot.frame
+                if not self.preview:self.recordable_frames.add(initial_snapshot.frame)
             if self.recorder:self.recorder.append(0,self.states,self.owner.state())
-            for row in self.states.values():writer.writerow({'time':0,'frame':self.world.get_snapshot().frame,'owner':self.owner.owner,**row})
+            for row in self.states.values():writer.writerow({'time':0,'frame':initial_snapshot.frame,'owner':self.owner.owner,**row})
             while not runtime.STOP.is_set():
                 started=time.perf_counter();self.commands()
                 if runtime.STOP.is_set():break
@@ -356,7 +441,7 @@ class Session(LegacySession):
                     if runtime.STOP.is_set():break
                     self.step_controls()
                     if not self.recording:self.frame_index+=1;self.elapsed=min(self.end_time,self.frame_index*self.dt)
-                snap=self.tick();self.snapshot(snap)
+                snap=self.tick(record_frame=moving);self.snapshot(snap)
                 if moving:
                     self.recorder.append(self.elapsed,self.states,self.owner.state())
                     for row in self.states.values():writer.writerow({'time':self.elapsed,'frame':snap.frame,'owner':self.owner.owner,**row})
@@ -368,21 +453,35 @@ class Session(LegacySession):
         except Exception as e:
             self.error=str(e);self.status='error';traceback.print_exc()
         finally:
-            if writer_file:writer_file.close()
+            try:
+                if writer_file:writer_file.close()
+            except Exception as e:self.error='; '.join(filter(None,[self.error,'关闭遥测文件失败：'+str(e)]))
             self.closed=True
-            if self.camera:
-                try:self.camera.stop();self.camera.destroy()
-                except Exception as e:self.error=self.error or '相机清理失败：'+str(e)
+            try:self.close_camera()
+            except Exception as e:self.error=self.error or '相机清理失败：'+str(e)
+            # Join any image write that entered before closed was set.
+            with self.image_lock:pass
             try:runtime.shutdown()
             except Exception as e:self.error=self.error or '清理失败：'+str(e)
-            try:self.world.set_weather(self.original_weather);self.world.apply_settings(self.original_settings)
-            except Exception as e:self.error=self.error or '恢复世界失败：'+str(e)
+            # A failure restoring one resource must not strand synchronous mode.
+            try:self.world.set_weather(self.original_weather)
+            except Exception as e:self.error=self.error or '恢复天气失败：'+str(e)
+            try:self.world.apply_settings(self.original_settings)
+            except Exception as e:self.error=self.error or '恢复世界设置失败：'+str(e)
             remaining=[a.id for a in self.owned if a.is_alive]
             if remaining:self.error=self.error or '存在未清理参与者：'+str(remaining)
-            if self.recorder:self.recorder.close(self.error)
-            if self.recording:self.recording.close()
+            try:
+                if self.recorder:self.recorder.close(self.error)
+            except Exception as e:self.error=self.error or '关闭录制失败：'+str(e)
+            try:
+                if self.recording:self.recording.close()
+            except Exception as e:self.error=self.error or '关闭重放失败：'+str(e)
+            try:
+                atomic_json(self.folder/'events.json',{'events':self.records,'fired':self.fired,'collisions':self.collisions,'error':self.error,'manual_override':self.override,'remaining_owned_actor_ids':remaining,'restored_weather':weather_dict(self.world.get_weather()),'restored_synchronous_mode':self.world.get_settings().synchronous_mode,'camera_samples':self.camera_samples,'unmapped_camera_frames':self.unmapped_camera_frames})
+            except Exception as e:self.error='; '.join(filter(None,[self.error,'保存运行结果失败：'+str(e)]))
+            # Terminal status is the publication barrier for all run results.
+            # Clients may read events/take immediately after seeing finished.
             self.status='error' if self.error else 'finished';self.write_status()
-            atomic_json(self.folder/'events.json',{'events':self.records,'fired':self.fired,'collisions':self.collisions,'error':self.error,'manual_override':self.override,'remaining_owned_actor_ids':remaining,'restored_weather':weather_dict(self.world.get_weather()),'restored_synchronous_mode':self.world.get_settings().synchronous_mode})
 
 if __name__=='__main__':
     p=argparse.ArgumentParser();p.add_argument('folder');p.add_argument('--preview',action='store_true');args=p.parse_args();folder=Path(args.folder).resolve()
