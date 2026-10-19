@@ -36,6 +36,12 @@ def boolean(value,label):
     return value
 
 
+def light_value(value):
+    v=number(value,0,2047,'车灯状态')
+    if v!=int(v):raise ValueError('车灯状态必须为整数')
+    return int(v)
+
+
 def validate(data):
     if not isinstance(data,dict):raise ValueError('场景必须为对象')
     s=copy.deepcopy(data)
@@ -67,6 +73,9 @@ def validate(data):
         a['name']=str(a.get('name',aid))[:80]
         if a.get('color') and (not isinstance(a['color'],str) or not re.fullmatch(r'#[0-9a-fA-F]{6}',a['color'])):raise ValueError('颜色需要 #RRGGBB')
         if not isinstance(a.get('model'),str) or not a['model'].startswith(('vehicle.','walker.pedestrian.','static.prop.')):raise ValueError('参与者模型类型不支持')
+        if 'lights' in a:
+            a['lights']=light_value(a['lights'])
+            if a['lights'] and not a['model'].startswith('vehicle.'):raise ValueError('车灯只支持车辆')
         for key in ('x','y','z','yaw'):a[key]=number(a.get(key,0),-100000,100000,key)
         a['speed']=number(a.get('speed',0),0,180,'车速')
         a['acceleration']=number(a.get('acceleration',2.5),.1,12,'加速度')
@@ -116,7 +125,7 @@ def validate(data):
                 clip['value']=number(clip.get('value',40),0,180,'片段目标速度')
                 if clip.get('easing','linear') not in ('linear','smooth'):raise ValueError('速度插值方式无效')
             if kind=='brake':clip['value']=number(clip.get('value',1),0,1,'片段制动力')
-            if kind=='lights':clip['value']=int(number(clip.get('value',3),0,2047,'灯光状态'))
+            if kind=='lights':clip['value']=light_value(clip.get('value',3))
             if kind=='lane_change':
                 if clip.get('direction','left') not in ('left','right'):raise ValueError('变道方向无效')
                 clip['lanes']=int(number(clip.get('lanes',1),1,3,'变道车道数'))
@@ -165,7 +174,7 @@ def validate(data):
             if a['target']==a['actor']:raise ValueError('不能跟随自己')
             a['reaction']=number(a.get('reaction',.8),0,5,'跟车反应时间')
             a['gap']=number(a.get('gap',3),0,100,'跟车最小距离')
-        if a['type']=='lights':a['value']=int(number(a.get('value',3),0,2047,'车灯状态'))
+        if a['type']=='lights':a['value']=light_value(a.get('value',3))
         if a['type']=='weather' and a.get('preset') not in LOOKS:raise ValueError('画面预设不存在')
     # The runtime evaluates timelines each tick, so an event on the same channel
     # would be silently overwritten. Require one authoring method per channel.

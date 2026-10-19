@@ -2,7 +2,7 @@
 
 这套软件把场景编排、CARLA 物理运行和实际轨迹重放连成一条可检查的数据链。维护时首先要保住三件事：车辆控制只有一个最终执行者，记录时间能够对应真实采样帧，失败后能恢复世界并留下可解释的结果。界面上的“运行成功”不能代替实验指标验收。
 
-本手册面向后续开发者和接手仓库的智能体，代码与协议基线为 **2026 年 10 月 10 日**，最近一次实验可行性复核为 **2026 年 10 月 17 日**；新增验证与未决问题见第十一节。默认工作目录是仓库根目录；当前部署在 `E:\Scene_package\Scene_HYX`，其他机器可以使用不同路径。自定义地图在 CARLA 中的名字为 `package/Maps/map10/map10`。地图网格、材质和 UE 工程不随此仓库分发。
+本手册面向后续开发者和接手仓库的智能体，代码与协议基线为 **2026 年 10 月 10 日**，实验可行性复核为 **2026 年 10 月 17 日**，四相机视频与原生日志流程于 **2026 年 10 月 19 日**补充；新增验证与未决问题见第十一节。默认工作目录是仓库根目录；当前部署在 `E:\Scene_package\Scene_HYX`，其他机器可以使用不同路径。自定义地图在 CARLA 中的名字为 `package/Maps/map10/map10`。地图网格、材质和 UE 工程不随此仓库分发。
 
 先熟悉实际操作时，阅读[用户手册](user-manual.md)；定位实现时按第一节的文件顺序；修改代码前检查第四、六节的运行约束；完成后按第八、十一节验证和交接。
 
@@ -73,7 +73,7 @@ Python 服务未启用热重载。改完后先正常结束当前运行，再退�
 
 `POST /api/export-python` 接收当前场景草稿、`hz`（10/20/40/60）和浏览器保存的 `input_config`。服务端复制草稿、设置 `dt=1/hz`、运行场景校验与固定轨迹基准校验，然后把规范化场景和输入标定嵌入模板。响应是可下载的 `.py`；下载不启动 CARLA，也不修改草稿。新增字段时同时核对导出序列化、运行入口及前端下载逻辑，避免编辑器运行与脚本运行含义分叉。
 
-生成脚本先定位项目根目录（`--project-root`、`HYX_SCENE_ROOT`、脚本父目录、导出时路径），再调用 `Session(scene, run_folder).run()`。每次创建 `studio_data/runs/py_<时间>_<随机值>/`，保存 `scene.json`、`launcher_manifest.json` 和 `console.txt`；引擎继续生成 `run_manifest.json`、`status.json`、`take.json`、`telemetry.csv`、`trajectory.jsonl`、`events.json` 及相机画面。窗口运行还写 `driver_input.csv`，含原始/归一化输入、仿真时刻和单调时钟；`--no-window` 不采集窗口输入。眼动由外部系统采集，不得把没有眼动列误写成采集故障。
+生成脚本先定位项目根目录（`--project-root`、`HYX_SCENE_ROOT`、脚本父目录、导出时路径），再调用 `Session(scene, run_folder).run()`。每次创建 `studio_data/runs/py_<时间>_<随机值>/`，保存 `scene.json`、`launcher_manifest.json` 和 `console.txt`；引擎继续生成 `run_manifest.json`、`status.json`、`take.json`、`telemetry.csv`、`trajectory.jsonl`、`events.json`、合成相机画面、`video.mp4` 及 `carla_replay.log`。窗口运行还写 `driver_input.csv`，含原始/归一化输入、仿真时刻和单调时钟；`--no-window` 不采集窗口输入。眼动由外部系统采集，不得把没有眼动列误写成采集故障。
 
 本地 Pygame 窗口读取 `frame.jpg`，使用与引擎已有的 `commands/` 和 `input.json` 协议发送接管、释放与驾驶指令。窗口中的摄像头刷新率与 CARLA 物理步长不同，输入约每 50 ms 采样一次；正式实验需用硬件与显示器另测。关闭窗口或按 Q 可提前停止，判断数据是否覆盖设计时长看 `take.json.covers_scene_duration`，不能只看 `status.json=finished`。脚本异常应写 `status.json=error` 和 `console.txt`，引擎的 `finally` 负责世界设置、天气和自有对象恢复。环境模式的 `locked_take` 是同一运行库中的基准目录名，移动项目时需连同基准录制一起保留。
 
@@ -395,3 +395,21 @@ git diff --check
 用户手册现包含 13 张真实操作截图，原始 PNG 保存在 `scene_studio/web/manual-assets/`，采集过程记录在同目录 `capture-log.json`。`docs/manual-figures.json` 保存黄色框的原图像素坐标和编号说明；生成器把它们作为 HTML 叠加层显示，不改写原始截图。正文使用相对路径的普通 Markdown 图片，网页支持点击放大、原始尺寸和 Esc 关闭。
 
 界面布局变化后，应从真实操作重新截图，再调整标注坐标；不要通过替换图片上的按钮、文字或运行状态制造不存在的界面。截图统一为 1280×720，若改变尺寸，还需同步元数据及放大视图样式。验证所有图片可加载、标注指向正确、关闭放大后焦点返回、窄屏仍可阅读；演示运行结束后检查自有对象清理和世界恢复。
+
+
+## 车辆灯光状态维护（2026-10）
+
+- 可选 `actor.lights` 保存 CARLA 位掩码；缺省视为 0，校验时不向旧场景注入此字段，以保持旧录制运动哈希兼容。刹车灯为 8、右转向灯为 16、左转向灯为 32。必须为 0–2047 的整数，不接受布尔值、分数或非有限值。
+- 前端两个独立下拉框按位修改，保留彼此及其他照明位。Studio 坐标为 `(CARLA.x, CARLA.z, CARLA.y)`，朝向取负；模型前方为 +X，左灯为 -Z、右灯为 +Z。
+- `engine.Session.spawn` 设置初始灯态；启动时在服务器收到初始状态后应用 t=0 片段；`StudioDriver.timeline_update` 在片段窗口内覆盖并恢复原状态。`lighting.lights_at` 用于实机预览任意时间定位，前端 `previewLights` 对应离线预演。两端边界统一为 `[start, end)`。
+- 刹车灯是明确编排的视觉变量，不自动由油门、刹车、停车行为推断；转向灯也不由变道自动推断。避免自动逻辑覆盖实验设置。
+- 录制保存 `get_light_state()` 的实际位状态，固定轨迹重放使用 `SetVehicleLightState`。驾驶视角合成画面中的主车 HUD 从会话状态读取灯位，在画布中心略偏左下方按仿真时间闪烁；预览、截图、视频及导出窗口都会显示它。位状态记录并非灯材质亮暗相位测量，且相机回调可能滞后于状态采样。
+- 新测试：`tests/test_vehicle_lights.py` 与 `tests/frontend_audit.mjs` 的灯态用例，覆盖位独立性、窗口边界、反向定位、旧场景、导出及实际状态记录。实机材质验证见本机 `optimization_reports/light_state_check/`。当前实拍覆盖 Tesla Model 3，不能把一次车型验证扩大为所有资产保证。
+
+## 四相机视频与 CARLA 原生日志（2026-10）
+
+`rendering.py` 使用参考脚本 `Scene1_01.py` 的四相机布置：前景位于 `(1.4,-0.18,1.04)`、视场角 150°；左镜 `(0.6,-1,0.9,-140°)`；右镜 `(0.6,1,0.9,140°)`；中央后视镜 `(-2.2,0,1.35,180°)`。镜面图像水平翻转后按 `MIRRORS` 矩形贴入 5740×1010 画布，再叠加 `asset/123V1.0.png`。Studio 预览按同一画布比例缩小；正式录制由 OpenCV 写入 `video.mp4`。切换非驾驶视角时只使用前景，不叠加镜面与驾驶舱。
+
+前景与镜面回调按 CARLA 世界帧号配对；镜面迟到时只取同帧或更早帧。正式录制主循环在相机时间落后物理时间超过约两个采样周期时，单次最多等待 1 秒；末尾最多再等 4 秒，让排队的相机帧到达。等待有上限，不能保证任何硬件都能达到配置 FPS。视频按仿真时间索引写入，缺失的编码时间格重复相邻画面，末尾填到试次时长；因此 `video_frames` 是编码帧数，不是独立相机采样数。独立样本应结合 `camera_samples`、`frame_count` 和视频相邻帧分析。高分辨率负载仍需按正式设备和场景实测。
+
+引擎在生成参与者前调用 `client.start_recorder()`，收尾时调用 `stop_recorder()`，得到 `carla_replay.log`。日志含车辆与相机生成、预热和正式试次，CARLA 日志总时长因而可能大于场景仿真时长；研究时间以 `telemetry.csv` 为准。它是 CARLA 自身的回放数据，不能代替 `trajectory.jsonl` 的研究数据语义。复测时先确认 CARLA 世界空闲，再通过 `client.show_recorder_file_info()` 读取，`client.replay_file()` 启动回放；回放测试结束后应停止回放并清理其创建的参与者。服务只在运行终态为 `finished` 且文件存在时公布视频和日志下载入口。

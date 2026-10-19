@@ -66,8 +66,7 @@ def display_and_drive(folder, worker, config, runtime, close_when_finished=False
         joystick = pygame.joystick.Joystick(config['index'])
         joystick.init()
 
-    width = min(SCENE['camera']['width'], 1280)
-    height = min(SCENE['camera']['height'], 720)
+    width, height = 5740, 1010  # Native experiment canvas; UI can be resized by the user.
     screen = pygame.display.set_mode((width, height), pygame.RESIZABLE)
     pygame.display.set_caption('HYX CARLA · ' + SCENE['name'])
     # Windows font registries can contain non-string entries; use Pygame's
@@ -276,6 +275,8 @@ def main():
                 else:
                     print('场景已提前结束，数据未覆盖计划时长：', folder / 'telemetry.csv')
                 print('事件记录：', folder / 'events.json')
+                print('CARLA 回放日志：', folder / 'carla_replay.log')
+                print('5740×1010 视频：', folder / 'video.mp4')
                 return 0
             except Exception as exc:
                 traceback.print_exc()

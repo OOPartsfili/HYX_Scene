@@ -14,6 +14,27 @@ from scene_studio.runner import Driver
 
 
 class EngineAuditTests(unittest.TestCase):
+    def test_lane_clip_preview_and_driver_target_match_carla_left_and_right(self):
+        from scene_studio.timeline import motion_at, pose_on_path
+        for yaw in (0,45,90,135,180,225,270,315):
+            rotation=carla.Rotation(yaw=yaw)
+            forward=rotation.get_forward_vector();right=rotation.get_right_vector()
+            path=[[d,d*forward.x,d*forward.y,0,yaw] for d in (0,10,20,30)]
+            for direction,side in (('left',-1),('right',1)):
+                with self.subTest(yaw=yaw,direction=direction):
+                    spec={'speed':20,'clips':[{'id':'lane','type':'lane_change','start':0,'duration':3,'direction':direction,'lanes':1}]}
+                    offset=motion_at(spec,3,3.5)['offset']
+                    preview=pose_on_path(path,10,offset)
+                    driver=object.__new__(Driver)
+                    driver._lane_change=None;driver.route_index=0;driver.actual_offset=offset
+                    driver.route=[NS(transform=carla.Transform(carla.Location(x=p[1],y=p[2]),rotation)) for p in path]
+                    driver.vice_car=NS(get_location=lambda:carla.Location(),get_velocity=lambda:carla.Vector3D())
+                    target=driver._target_waypoint(0).transform.location
+                    lateral=(target.x-10*forward.x)*right.x+(target.y-10*forward.y)*right.y
+                    self.assertAlmostEqual(lateral,side*3.5,places=5)
+                    self.assertAlmostEqual(preview['x'],target.x,places=5)
+                    self.assertAlmostEqual(preview['y'],target.y,places=5)
+
     def test_stale_or_other_scene_plan_is_rejected(self):
         from scene_studio.planning import plan_is_current,PLAN_VERSION
         from scene_studio.timeline import motion_hash

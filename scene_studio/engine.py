@@ -26,6 +26,8 @@ from scene_studio.schema import validate,look_values,triggered
 from scene_studio.timeline import ControlOwner,motion_at,pose_on_path
 from scene_studio.recording import Recording,RecordingWriter
 from scene_studio.planning import Planner,plan_is_current
+from scene_studio.lighting import lights_at
+from scene_studio.rendering import DriverView,MIRRORS,OUTPUT_SIZE,preview_size
 from traffic_math import follow_speed
 
 WEATHER_KEYS=('cloudiness','precipitation','precipitation_deposits','wind_intensity','sun_azimuth_angle','sun_altitude_angle','fog_density','fog_distance','fog_falloff','wetness','scattering_intensity','mie_scattering_scale','rayleigh_scattering_scale','dust_storm')
@@ -97,6 +99,8 @@ class Session(LegacySession):
         self.saved_velocities={};self.last_controls={};self.last_source={};self.render_ticks=0
         self.last_shot_second=-1;self.camera_samples=[];self.unmapped_camera_frames=0
         self.first_recorded_frame=None;self.initial_snapshot=None;self.recordable_frames=set()
+        self.mirror_cameras=[];self.driver_view=DriverView(folder,self.scene['camera']['fps'],preview,preview_size(self.scene['camera']))
+        self.carla_log_started=False;self.camera_error=None;self.render_lock=threading.Lock()
 
     def spawn(self,spec,pose=None):
         aid=spec['id']
@@ -118,6 +122,7 @@ class Session(LegacySession):
         if spec['model'].startswith('vehicle.'):
             self.drivers[aid]=StudioDriver(actor,spec,self.plan['tracks'][aid])
             actor.apply_control(carla.VehicleControl(brake=1))
+            actor.set_light_state(carla.VehicleLightState(spec.get('lights',0)))
         elif spec['model'].startswith('walker.'):
             self.walkers[aid]={'speed':spec['speed']/3.6,'index':0}
         actor.set_simulate_physics(not(self.preview or self.recording or spec['behavior']=='parked' or spec['model'].startswith('static.')))
@@ -135,14 +140,17 @@ class Session(LegacySession):
 
     def close_camera(self):
         camera=self.camera
-        if camera is None:return
+        sensors=([camera] if camera is not None else [])+list(getattr(self,'mirror_cameras',[]))
+        self.mirror_cameras=[]
+        if not sensors:return
         errors=[]
-        try:camera.stop()
-        except Exception as e:errors.append('stop: '+str(e))
-        try:
-            if camera.is_alive and camera.destroy() is False:raise RuntimeError('destroy returned False')
-        except Exception as e:errors.append('destroy: '+str(e))
-        if not camera.is_alive:self.camera=None
+        for sensor in sensors:
+            try:sensor.stop()
+            except Exception as e:errors.append('stop: '+str(e))
+            try:
+                if sensor.is_alive and sensor.destroy() is False:raise RuntimeError('destroy returned False')
+            except Exception as e:errors.append('destroy: '+str(e))
+        if camera is None or not camera.is_alive:self.camera=None
         if errors:raise RuntimeError('; '.join(errors))
 
     def apply_look(self,look):
@@ -156,11 +164,14 @@ class Session(LegacySession):
     def make_camera(self,target=None,view=None):
         self.camera_generation+=1;generation=self.camera_generation
         self.close_camera()
+        if getattr(self,'driver_view',None):self.driver_view.reset()
         target=target or getattr(self,'camera_target',self.scene['ego']);self.camera_target=target
         if target not in self.actors:return
         cfg=self.scene['camera'];view=view or cfg.get('view','driver');cfg['view']=view
+        if getattr(self,'driver_view',None):self.driver_view.view=view
         bp=self.world.get_blueprint_library().find('sensor.camera.rgb')
-        options={'image_size_x':cfg['width'],'image_size_y':cfg['height'],'fov':cfg['fov'],'sensor_tick':max(self.dt,1/cfg['fps']),**look_values(self.scene['look'])['camera']}
+        size=self.driver_view.size
+        options={'image_size_x':size[0],'image_size_y':size[1],'fov':150 if view=='driver' else cfg['fov'],'sensor_tick':max(self.dt,1/cfg['fps']),**look_values(self.scene['look'])['camera']}
         for key,value in options.items():
             if not bp.has_attribute(key):raise ValueError('相机不支持 '+key)
             bp.set_attribute(key,str(value))
@@ -170,6 +181,19 @@ class Session(LegacySession):
         self.camera=self.world.spawn_actor(bp,tf,attach_to=self.actors[target])
         self.owned.append(self.camera);runtime.register(OwnedActor(self.camera),'destroy')
         self.camera.listen(lambda im:self.on_frame(im,generation))
+        if view=='driver':
+            for name,config in MIRRORS.items():
+                x,y,z,yaw=config['pose'];_,_,width,height=config['rect']
+                mirror_bp=self.world.get_blueprint_library().find('sensor.camera.rgb')
+                mirror_options={**options,'image_size_x':width,'image_size_y':height,'fov':config['fov']}
+                for key,value in mirror_options.items():mirror_bp.set_attribute(key,str(value))
+                sensor=self.world.spawn_actor(mirror_bp,carla.Transform(carla.Location(x=x,y=y,z=z),carla.Rotation(yaw=yaw)),attach_to=self.actors[target])
+                self.mirror_cameras.append(sensor);self.owned.append(sensor);runtime.register(OwnedActor(sensor),'destroy')
+                sensor.listen(lambda im,role=name,gen=generation:self.on_mirror(im,gen,role))
+
+    def on_mirror(self,image,generation,name):
+        if self.closed or generation!=self.camera_generation:return
+        if getattr(self,'driver_view',None):self.driver_view.push_mirror(name,image)
 
     def camera_frame_in_trial(self,frame):
         # Preview can seek freely. Trial images must belong to a frame at or
@@ -184,7 +208,15 @@ class Session(LegacySession):
             # Late/unowned frames cannot be assigned the callback's current
             # elapsed time: that would mislabel research screenshots.
             self.unmapped_camera_frames+=1;return
-        arr=np.frombuffer(image.raw_data,np.uint8).reshape(image.height,image.width,4)[:,:,:3]
+        if getattr(self,'driver_view',None):
+            try:
+                ego_id=self.scene['ego']
+                initial_lights=next((a.get('lights',0) for a in self.scene['actors'] if a['id']==ego_id),0)
+                bits=self.states.get(ego_id,{}).get('lights',initial_lights)
+                with self.render_lock:arr=self.driver_view.render(image,t,bits)
+            except Exception as exc:
+                self.camera_error=str(exc);return
+        else:arr=np.frombuffer(image.raw_data,np.uint8).reshape(image.height,image.width,4)[:,:,:3]
         ok,data=cv2.imencode('.jpg',arr,[cv2.IMWRITE_JPEG_QUALITY,88])
         if not ok or self.closed or generation!=self.camera_generation:return
         with self.image_lock:
@@ -209,6 +241,7 @@ class Session(LegacySession):
         now=time.perf_counter();self.frame_count+=1;self.frame_times.append(now);self.frame_times=self.frame_times[-100:];self.last_image_time=now
 
     def tick(self,record_frame=False):
+        if getattr(self,'camera_error',None):raise RuntimeError('相机或视频输出失败：'+self.camera_error)
         expected=self.world.get_snapshot().frame+1;self.frame_times_map[expected]=self.elapsed
         # Decide before advancing: camera callbacks may precede CSV writes.
         if record_frame and not self.preview:self.recordable_frames.add(expected)
@@ -220,7 +253,7 @@ class Session(LegacySession):
 
     def start(self):
         root=Path(__file__).resolve().parents[1]
-        sources=('engine.py','runner.py','schema.py','timeline.py','recording.py','planning.py','routing.py')
+        sources=('engine.py','runner.py','schema.py','timeline.py','recording.py','planning.py','routing.py','lighting.py','rendering.py')
         files=['scene_studio/'+name for name in sources]+['optimized_control.py','traffic_math.py','scene_runtime.py',
             'optimization_config.py','agents/navigation/controller.py','agents/navigation/global_route_planner.py','agents/tools/misc.py']
         atomic_json(self.folder/'run_manifest.json',{
@@ -233,6 +266,9 @@ class Session(LegacySession):
         settings=self.world.get_settings();settings.synchronous_mode=True;settings.fixed_delta_seconds=self.dt
         settings.substepping=True;settings.max_substep_delta_time=.01;settings.max_substeps=max(10,math.ceil(self.dt/.01))
         self.world.apply_settings(settings)
+        if not self.preview:
+            self.client.start_recorder(str(self.folder/'carla_replay.log'))
+            self.carla_log_started=True
         if self.recording:
             first=self.recording.frame(0)
             for aid,pose in first['actors'].items():self.spawn(self.specs[aid],pose)
@@ -261,6 +297,11 @@ class Session(LegacySession):
             for _ in range(2):self.tick()
             for aid,d in self.drivers.items():
                 d.rejoin()
+        if not self.recording:
+            # Apply t=0 lamps after the initial state has reached the server;
+            # restore the true initial lamps when a t=0 light clip ends.
+            for d in self.drivers.values():d.timeline_update(0,self.actors)
+            self.tick()
         self.status='preview' if self.preview else 'running'
         if not self.preview:self.recorder=RecordingWriter(self.folder,copy.deepcopy(self.scene),self.baseline_weather)
         self.initial_snapshot=self.world.get_snapshot()
@@ -304,6 +345,8 @@ class Session(LegacySession):
             for aid,a in self.actors.items():
                 frames=self.plan['tracks'][aid]['frames'];i=min(range(len(frames)),key=lambda i:abs(frames[i][0]-self.elapsed));p=frames[i]
                 a.set_transform(transform({'x':p[1],'y':p[2],'z':self.specs[aid]['z']+(p[3]-frames[0][3]),'yaw':p[4]}))
+                if a.type_id.startswith('vehicle.'):
+                    a.set_light_state(carla.VehicleLightState(lights_at(self.specs[aid],self.elapsed)))
 
     def take_control(self,owner):
         aid=self.scene['ego'];a=self.actors.get(aid)
@@ -431,6 +474,15 @@ class Session(LegacySession):
             while not runtime.STOP.is_set():
                 started=time.perf_counter();self.commands()
                 if runtime.STOP.is_set():break
+                if not self.preview and not self.paused and self.camera and self.camera_target==self.scene['ego']:
+                    # The 5740-pixel front camera can lag behind physics. Keep
+                    # recorded images near the physics timeline, bounded so a
+                    # missing sensor callback cannot stall the entire trial.
+                    tolerance=max(2/self.scene['camera']['fps'],3*self.dt)
+                    deadline=time.monotonic()+1
+                    while (self.elapsed-self.camera_time>tolerance and not self.camera_error and
+                           not runtime.STOP.is_set() and time.monotonic()<deadline):
+                        time.sleep(.01)
                 moving=not self.preview and not self.paused
                 if moving:
                     if self.recording:
@@ -456,9 +508,26 @@ class Session(LegacySession):
             try:
                 if writer_file:writer_file.close()
             except Exception as e:self.error='; '.join(filter(None,[self.error,'关闭遥测文件失败：'+str(e)]))
+            # Give already-rendering camera callbacks a bounded chance to
+            # deliver the final trial images before stopping their sensors.
+            if not getattr(self,'preview',True) and not getattr(self,'error',None) and getattr(self,'elapsed',0)>0:
+                target=max(0,self.elapsed-max(self.dt,1/self.scene['camera']['fps']))
+                deadline=time.monotonic()+4
+                while self.camera_time+1e-6<target and not self.camera_error and time.monotonic()<deadline:
+                    time.sleep(.05)
+            if getattr(self,'camera_error',None) and not self.error:self.error='相机或视频输出失败：'+self.camera_error
             self.closed=True
             try:self.close_camera()
             except Exception as e:self.error=self.error or '相机清理失败：'+str(e)
+            try:
+                if getattr(self,'driver_view',None):
+                    with self.render_lock:self.driver_view.close(self.elapsed)
+                    if not self.preview and self.driver_view.video_frames==0:
+                        raise RuntimeError('CARLA 视频没有有效帧')
+            except Exception as e:self.error=self.error or '视频关闭失败：'+str(e)
+            try:
+                if getattr(self,'carla_log_started',False):self.client.stop_recorder();self.carla_log_started=False
+            except Exception as e:self.error=self.error or 'CARLA 回放日志关闭失败：'+str(e)
             # Join any image write that entered before closed was set.
             with self.image_lock:pass
             try:runtime.shutdown()
@@ -477,7 +546,7 @@ class Session(LegacySession):
                 if self.recording:self.recording.close()
             except Exception as e:self.error=self.error or '关闭重放失败：'+str(e)
             try:
-                atomic_json(self.folder/'events.json',{'events':self.records,'fired':self.fired,'collisions':self.collisions,'error':self.error,'manual_override':self.override,'remaining_owned_actor_ids':remaining,'restored_weather':weather_dict(self.world.get_weather()),'restored_synchronous_mode':self.world.get_settings().synchronous_mode,'camera_samples':self.camera_samples,'unmapped_camera_frames':self.unmapped_camera_frames})
+                atomic_json(self.folder/'events.json',{'events':self.records,'fired':self.fired,'collisions':self.collisions,'error':self.error,'manual_override':self.override,'remaining_owned_actor_ids':remaining,'restored_weather':weather_dict(self.world.get_weather()),'restored_synchronous_mode':self.world.get_settings().synchronous_mode,'camera_samples':self.camera_samples,'unmapped_camera_frames':self.unmapped_camera_frames,'video_frames':getattr(getattr(self,'driver_view',None),'video_frames',0),'first_complete_mirror_frame':getattr(getattr(self,'driver_view',None),'first_mirror_frame',None)})
             except Exception as e:self.error='; '.join(filter(None,[self.error,'保存运行结果失败：'+str(e)]))
             # Terminal status is the publication barrier for all run results.
             # Clients may read events/take immediately after seeing finished.

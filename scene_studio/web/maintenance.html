@@ -16,7 +16,7 @@ code{font: .9em/1.7 Consolas,"Microsoft YaHei",monospace;background:#eef3f0;padd
 .table-scroll{overflow-x:auto;margin:22px 0;border:1px solid var(--line);border-radius:7px}table{border-collapse:collapse;width:100%;font-size:14px;line-height:1.8}th,td{padding:12px 14px;text-align:left;vertical-align:top;border-bottom:1px solid var(--line);overflow-wrap:anywhere}th{background:#e9f1ed;color:#234d3e;font-weight:700}tr:last-child td{border-bottom:0}tbody tr:nth-child(even){background:#fafcfb}td:first-child{min-width:110px}td code{font-size:13px}a[data-repo-path]{cursor:help;color:#294f48;text-decoration:underline dotted;font-family:Consolas,"Microsoft YaHei",monospace}
 .doc-footer{border-top:1px solid var(--line);padding-top:22px;margin-top:50px;color:var(--muted);font-size:13px}.mobile-toc{display:none}.source-note{font-size:13px;color:var(--muted)}.skip{position:fixed;left:12px;top:-70px;padding:8px;background:#fff;z-index:20}.skip:focus{top:8px}
 .manual-figure{margin:25px 0 32px;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:#f8fbf9}.shot-button{display:block;width:100%;padding:0;border:0;background:#17202b;cursor:zoom-in;position:relative;text-align:left}.shot-canvas{position:relative;display:block;width:100%;line-height:0}.shot-canvas img{display:block;width:100%;height:auto}.shot-mark{position:absolute;border:2px solid #ffd15c;border-radius:4px;box-shadow:0 0 0 1px #152c35aa;pointer-events:none}.shot-mark b{position:absolute;left:-8px;top:-9px;display:grid;place-items:center;width:23px;height:23px;background:#ffd15c;color:#162936;border-radius:50%;font:bold 13px/1 sans-serif;box-shadow:0 1px 4px #0007}.zoom-hint{position:absolute;right:8px;bottom:8px;padding:4px 9px;background:#10281eed;color:white;border-radius:5px;font:12px/1.6 sans-serif}.manual-figure figcaption{padding:12px 16px 3px;font-size:14px;font-weight:bold;color:#224b3b}.shot-legend{list-style:none;counter-reset:step;padding:2px 16px 10px!important;margin:0;display:grid;grid-template-columns:1fr 1fr;gap:3px 20px;font-size:13px;line-height:1.7}.shot-legend li{counter-increment:step;position:relative;padding-left:28px;margin:5px 0}.shot-legend li:before{content:counter(step);position:absolute;left:0;top:2px;display:grid;place-items:center;width:20px;height:20px;background:#f4cc6b;color:#253e30;border-radius:50%;font-weight:bold}
-.shot-dialog{width:96vw;max-width:1500px;max-height:94vh;padding:0;border:1px solid #577d6c;border-radius:10px;background:#13251f;color:#fff}.shot-dialog::backdrop{background:#071811d9}.viewer-toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 16px;font-size:14px}.viewer-toolbar button{padding:7px 13px;border:1px solid #88ac99;border-radius:5px;background:#294a3b;color:#fff;cursor:pointer}.viewer-pan{overflow:auto;max-height:calc(94vh - 105px);background:#111b25}.viewer-pan .shot-canvas{margin:auto}.viewer-pan.original .shot-canvas{width:1280px;max-width:none}.viewer-note{margin:0;padding:8px 16px;font-size:12px;color:#ccdfd2}
+.shot-dialog{width:96vw;max-width:1500px;max-height:94vh;padding:0;border:1px solid #577d6c;border-radius:10px;background:#13251f;color:#fff}.shot-dialog::backdrop{background:#071811d9}.viewer-toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 16px;font-size:14px}.viewer-toolbar button{padding:7px 13px;border:1px solid #88ac99;border-radius:5px;background:#294a3b;color:#fff;cursor:pointer}.viewer-pan{overflow:auto;max-height:calc(94vh - 105px);background:#111b25}.viewer-pan .shot-canvas{margin:auto}.viewer-pan.original .shot-canvas{width:var(--original-width,1280px);max-width:none}.viewer-note{margin:0;padding:8px 16px;font-size:12px;color:#ccdfd2}
 @media(max-width:760px){.shot-legend{grid-template-columns:1fr}.shot-mark{border-width:1px}.shot-mark b{width:18px;height:18px;font-size:11px;left:-5px;top:-6px}.viewer-toolbar{font-size:12px;flex-wrap:wrap}.zoom-hint{font-size:10px}}
 @media print{.shot-button{break-inside:avoid}.manual-figure{break-inside:avoid}.zoom-hint,.shot-dialog{display:none}.shot-mark{border-color:#9b6600}.shot-legend{font-size:9pt}}
 @media(min-width:1600px){.article-shell{padding-left:62px;padding-right:62px}}
@@ -40,6 +40,8 @@ code{font: .9em/1.7 Consolas,"Microsoft YaHei",monospace;background:#eef3f0;padd
 <li><a href="#_18">十 备份 恢复与研究边界</a></li>
 <li><a href="#_19">十一 给下一位维护者的接手步骤</a></li>
 <li><a href="#_21">十二 手册如何维护</a></li>
+<li><a href="#2026-10">车辆灯光状态维护（2026-10）</a></li>
+<li><a href="#carla-2026-10">四相机视频与 CARLA 原生日志（2026-10）</a></li>
 </ul>
 </div>
 <details class="mobile-toc"><summary>展开本页目录</summary><div class="toc">
@@ -56,12 +58,14 @@ code{font: .9em/1.7 Consolas,"Microsoft YaHei",monospace;background:#eef3f0;padd
 <li><a href="#_18">十 备份 恢复与研究边界</a></li>
 <li><a href="#_19">十一 给下一位维护者的接手步骤</a></li>
 <li><a href="#_21">十二 手册如何维护</a></li>
+<li><a href="#2026-10">车辆灯光状态维护（2026-10）</a></li>
+<li><a href="#carla-2026-10">四相机视频与 CARLA 原生日志（2026-10）</a></li>
 </ul>
 </div>
 </details></aside>
 <main id="content" class="article-shell"><p class="kicker">HYX SCENE STUDIO · 开发维护手册</p><p class="subtitle">实现架构 · 数据约束 · 测试与交接</p><h1 id="carla">CARLA 场景编辑器开发维护手册</h1>
 <p>这套软件把场景编排、CARLA 物理运行和实际轨迹重放连成一条可检查的数据链。维护时首先要保住三件事：车辆控制只有一个最终执行者，记录时间能够对应真实采样帧，失败后能恢复世界并留下可解释的结果。界面上的“运行成功”不能代替实验指标验收。</p>
-<p>本手册面向后续开发者和接手仓库的智能体，代码与协议基线为 <strong>2026 年 10 月 10 日</strong>，最近一次实验可行性复核为 <strong>2026 年 10 月 17 日</strong>；新增验证与未决问题见第十一节。默认工作目录是仓库根目录；当前部署在 <code>E:\Scene_package\Scene_HYX</code>，其他机器可以使用不同路径。自定义地图在 CARLA 中的名字为 <code>package/Maps/map10/map10</code>。地图网格、材质和 UE 工程不随此仓库分发。</p>
+<p>本手册面向后续开发者和接手仓库的智能体，代码与协议基线为 <strong>2026 年 10 月 10 日</strong>，实验可行性复核为 <strong>2026 年 10 月 17 日</strong>，四相机视频与原生日志流程于 <strong>2026 年 10 月 19 日</strong>补充；新增验证与未决问题见第十一节。默认工作目录是仓库根目录；当前部署在 <code>E:\Scene_package\Scene_HYX</code>，其他机器可以使用不同路径。自定义地图在 CARLA 中的名字为 <code>package/Maps/map10/map10</code>。地图网格、材质和 UE 工程不随此仓库分发。</p>
 <p>先熟悉实际操作时，阅读<a href="guide.html">用户手册</a>；定位实现时按第一节的文件顺序；修改代码前检查第四、六节的运行约束；完成后按第八、十一节验证和交接。</p>
 <p>2026 年 10 月 10 日的审核记录包含 111 项 Python 回归、22 项前端回归、26 个交通交互场景及 14 次录制、重放和预设运行。证据在 <code>optimization_reports/code_audit_20261010/summary.json</code> 及其引用的日志中。这些结果属于当时的代码、地图和参数；修改后必须重新选择并执行相应验证，不能沿用旧的通过数字，也不能据此声称零 BUG。</p>
 <h2 id="_1">一 先建立正确的系统边界</h2>
@@ -108,7 +112,7 @@ code{font: .9em/1.7 Consolas,"Microsoft YaHei",monospace;background:#eef3f0;padd
 <h2 id="_4">三 场景 计划与运行数据如何流转</h2>
 <h3 id="python">Python 导出与独立运行</h3>
 <p><code>POST /api/export-python</code> 接收当前场景草稿、<code>hz</code>（10/20/40/60）和浏览器保存的 <code>input_config</code>。服务端复制草稿、设置 <code>dt=1/hz</code>、运行场景校验与固定轨迹基准校验，然后把规范化场景和输入标定嵌入模板。响应是可下载的 <code>.py</code>；下载不启动 CARLA，也不修改草稿。新增字段时同时核对导出序列化、运行入口及前端下载逻辑，避免编辑器运行与脚本运行含义分叉。</p>
-<p>生成脚本先定位项目根目录（<code>--project-root</code>、<code>HYX_SCENE_ROOT</code>、脚本父目录、导出时路径），再调用 <code>Session(scene, run_folder).run()</code>。每次创建 <code>studio_data/runs/py_&lt;时间&gt;_&lt;随机值&gt;/</code>，保存 <code>scene.json</code>、<code>launcher_manifest.json</code> 和 <code>console.txt</code>；引擎继续生成 <code>run_manifest.json</code>、<code>status.json</code>、<code>take.json</code>、<code>telemetry.csv</code>、<code>trajectory.jsonl</code>、<code>events.json</code> 及相机画面。窗口运行还写 <code>driver_input.csv</code>，含原始/归一化输入、仿真时刻和单调时钟；<code>--no-window</code> 不采集窗口输入。眼动由外部系统采集，不得把没有眼动列误写成采集故障。</p>
+<p>生成脚本先定位项目根目录（<code>--project-root</code>、<code>HYX_SCENE_ROOT</code>、脚本父目录、导出时路径），再调用 <code>Session(scene, run_folder).run()</code>。每次创建 <code>studio_data/runs/py_&lt;时间&gt;_&lt;随机值&gt;/</code>，保存 <code>scene.json</code>、<code>launcher_manifest.json</code> 和 <code>console.txt</code>；引擎继续生成 <code>run_manifest.json</code>、<code>status.json</code>、<code>take.json</code>、<code>telemetry.csv</code>、<code>trajectory.jsonl</code>、<code>events.json</code>、合成相机画面、<code>video.mp4</code> 及 <code>carla_replay.log</code>。窗口运行还写 <code>driver_input.csv</code>，含原始/归一化输入、仿真时刻和单调时钟；<code>--no-window</code> 不采集窗口输入。眼动由外部系统采集，不得把没有眼动列误写成采集故障。</p>
 <p>本地 Pygame 窗口读取 <code>frame.jpg</code>，使用与引擎已有的 <code>commands/</code> 和 <code>input.json</code> 协议发送接管、释放与驾驶指令。窗口中的摄像头刷新率与 CARLA 物理步长不同，输入约每 50 ms 采样一次；正式实验需用硬件与显示器另测。关闭窗口或按 Q 可提前停止，判断数据是否覆盖设计时长看 <code>take.json.covers_scene_duration</code>，不能只看 <code>status.json=finished</code>。脚本异常应写 <code>status.json=error</code> 和 <code>console.txt</code>，引擎的 <code>finally</code> 负责世界设置、天气和自有对象恢复。环境模式的 <code>locked_take</code> 是同一运行库中的基准目录名，移动项目时需连同基准录制一起保留。</p>
 <h3 id="json">场景 JSON 是用户意图</h3>
 <p>场景输入接受版本 1 或 2，<code>validate()</code> 返回深拷贝并归一为 <code>version: 2</code>。<code>mode</code> 为 <code>motion</code> 或 <code>environment</code>；后者通过 <code>locked_take</code> 指向同一运行库中的基准目录。它不是任意文件路径。</p>
@@ -325,7 +329,20 @@ git diff --check
 <p>修改界面按钮、控制含义、默认值、文件格式或启动方法时，同步更新对应手册，并在本机编辑服务的 <code>/static/guide.html</code>、<code>/static/maintenance.html</code> 检查实际阅读布局。网页中的代码文件名只作仓库索引，Markdown 源文件保留可打开的相对源码链接。版本日期表示核对基线；新的测试数和硬件支持必须有证据才更新。</p>
 <p>用户手册现包含 13 张真实操作截图，原始 PNG 保存在 <code>scene_studio/web/manual-assets/</code>，采集过程记录在同目录 <code>capture-log.json</code>。<code>docs/manual-figures.json</code> 保存黄色框的原图像素坐标和编号说明；生成器把它们作为 HTML 叠加层显示，不改写原始截图。正文使用相对路径的普通 Markdown 图片，网页支持点击放大、原始尺寸和 Esc 关闭。</p>
 <p>界面布局变化后，应从真实操作重新截图，再调整标注坐标；不要通过替换图片上的按钮、文字或运行状态制造不存在的界面。截图统一为 1280×720，若改变尺寸，还需同步元数据及放大视图样式。验证所有图片可加载、标注指向正确、关闭放大后焦点返回、窄屏仍可阅读；演示运行结束后检查自有对象清理和世界恢复。</p>
-<footer class="doc-footer">文档源文件：<code>docs/developer-maintenance-manual.md</code><br>实现说明基线：2026-10-10；最近验证与研究使用边界补充：2026-10-17。生成网页由同一份正文维护。<p class="source-note">源码文件名是仓库索引；需要打开源码时，请使用项目内 Markdown 手册的链接。</p></footer></main></div>
+<h2 id="2026-10">车辆灯光状态维护（2026-10）</h2>
+<ul>
+<li>可选 <code>actor.lights</code> 保存 CARLA 位掩码；缺省视为 0，校验时不向旧场景注入此字段，以保持旧录制运动哈希兼容。刹车灯为 8、右转向灯为 16、左转向灯为 32。必须为 0–2047 的整数，不接受布尔值、分数或非有限值。</li>
+<li>前端两个独立下拉框按位修改，保留彼此及其他照明位。Studio 坐标为 <code>(CARLA.x, CARLA.z, CARLA.y)</code>，朝向取负；模型前方为 +X，左灯为 -Z、右灯为 +Z。</li>
+<li><code>engine.Session.spawn</code> 设置初始灯态；启动时在服务器收到初始状态后应用 t=0 片段；<code>StudioDriver.timeline_update</code> 在片段窗口内覆盖并恢复原状态。<code>lighting.lights_at</code> 用于实机预览任意时间定位，前端 <code>previewLights</code> 对应离线预演。两端边界统一为 <code>[start, end)</code>。</li>
+<li>刹车灯是明确编排的视觉变量，不自动由油门、刹车、停车行为推断；转向灯也不由变道自动推断。避免自动逻辑覆盖实验设置。</li>
+<li>录制保存 <code>get_light_state()</code> 的实际位状态，固定轨迹重放使用 <code>SetVehicleLightState</code>。驾驶视角合成画面中的主车 HUD 从会话状态读取灯位，在画布中心略偏左下方按仿真时间闪烁；预览、截图、视频及导出窗口都会显示它。位状态记录并非灯材质亮暗相位测量，且相机回调可能滞后于状态采样。</li>
+<li>新测试：<code>tests/test_vehicle_lights.py</code> 与 <code>tests/frontend_audit.mjs</code> 的灯态用例，覆盖位独立性、窗口边界、反向定位、旧场景、导出及实际状态记录。实机材质验证见本机 <code>optimization_reports/light_state_check/</code>。当前实拍覆盖 Tesla Model 3，不能把一次车型验证扩大为所有资产保证。</li>
+</ul>
+<h2 id="carla-2026-10">四相机视频与 CARLA 原生日志（2026-10）</h2>
+<p><code>rendering.py</code> 使用参考脚本 <code>Scene1_01.py</code> 的四相机布置：前景位于 <code>(1.4,-0.18,1.04)</code>、视场角 150°；左镜 <code>(0.6,-1,0.9,-140°)</code>；右镜 <code>(0.6,1,0.9,140°)</code>；中央后视镜 <code>(-2.2,0,1.35,180°)</code>。镜面图像水平翻转后按 <code>MIRRORS</code> 矩形贴入 5740×1010 画布，再叠加 <code>asset/123V1.0.png</code>。Studio 预览按同一画布比例缩小；正式录制由 OpenCV 写入 <code>video.mp4</code>。切换非驾驶视角时只使用前景，不叠加镜面与驾驶舱。</p>
+<p>前景与镜面回调按 CARLA 世界帧号配对；镜面迟到时只取同帧或更早帧。正式录制主循环在相机时间落后物理时间超过约两个采样周期时，单次最多等待 1 秒；末尾最多再等 4 秒，让排队的相机帧到达。等待有上限，不能保证任何硬件都能达到配置 FPS。视频按仿真时间索引写入，缺失的编码时间格重复相邻画面，末尾填到试次时长；因此 <code>video_frames</code> 是编码帧数，不是独立相机采样数。独立样本应结合 <code>camera_samples</code>、<code>frame_count</code> 和视频相邻帧分析。高分辨率负载仍需按正式设备和场景实测。</p>
+<p>引擎在生成参与者前调用 <code>client.start_recorder()</code>，收尾时调用 <code>stop_recorder()</code>，得到 <code>carla_replay.log</code>。日志含车辆与相机生成、预热和正式试次，CARLA 日志总时长因而可能大于场景仿真时长；研究时间以 <code>telemetry.csv</code> 为准。它是 CARLA 自身的回放数据，不能代替 <code>trajectory.jsonl</code> 的研究数据语义。复测时先确认 CARLA 世界空闲，再通过 <code>client.show_recorder_file_info()</code> 读取，<code>client.replay_file()</code> 启动回放；回放测试结束后应停止回放并清理其创建的参与者。服务只在运行终态为 <code>finished</code> 且文件存在时公布视频和日志下载入口。</p>
+<footer class="doc-footer">文档源文件：<code>docs/developer-maintenance-manual.md</code><br>实现说明基线：2026-10-10；四相机与导出功能复测：2026-10-19。生成网页由同一份正文维护。<p class="source-note">源码文件名是仓库索引；需要打开源码时，请使用项目内 Markdown 手册的链接。</p></footer></main></div>
 <dialog id="shot-viewer" class="shot-dialog" aria-labelledby="viewer-title"><div class="viewer-toolbar"><span id="viewer-title">操作截图</span><div><button id="viewer-size" type="button">原始尺寸</button> <button id="viewer-close" type="button" autofocus>关闭 ×</button></div></div><div class="viewer-pan"></div><p class="viewer-note">黄色框与编号对应图下步骤。原始尺寸可横向、纵向滚动；按 Esc 关闭。</p></dialog>
 <script>
 const viewer = document.getElementById('shot-viewer');

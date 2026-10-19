@@ -19,7 +19,60 @@ function harness(names,extra={}){
 
 test('both shipped frontend modules parse',()=>{
  new vm.Script(app.replace(/^import .*;\r?\n/gm,''));
- new vm.Script(seq.replace(/export /g,''));
+ new vm.Script(seq.replace(/export /g,'')).runInNewContext({});
+});
+
+test('turn and brake selectors preserve each other and unrelated lamp bits',()=>{
+ const ctx=harness(['setLampBits','previewLights']);
+ for(const turn of [0,16,32])for(const brake of [0,8]){
+  let bits=ctx.setLampBits(3|48,48,turn);
+  bits=ctx.setLampBits(bits,8,brake);
+  assert.equal(bits,3|turn|brake);
+ }
+ const a={lights:8,clips:[{id:'lamp',type:'lights',start:1,duration:2,value:32}]};
+ assert.equal(ctx.previewLights(a,0),8);assert.equal(ctx.previewLights(a,1),32);
+ assert.equal(ctx.previewLights(a,3),8);assert.equal(ctx.previewLights(a,0),8);
+});
+
+test('lamp selectors update the stored actor state and respect edit locking',()=>{
+ const turn={dataset:{lamp:'48'},value:'32'},brake={dataset:{lamp:'8'},value:'8'};
+ const box={querySelectorAll:()=>[turn,brake]},a={lights:3};let locked=false;
+ const ctx=harness(['setLampBits','bindLampFields'],{motionLocked:()=>locked,sequencer:{render(){}}});
+ ctx.bindLampFields(box,a,'lights');turn.onchange();brake.onchange();assert.equal(a.lights,43);
+ locked=true;turn.value='16';turn.onchange();assert.equal(a.lights,43);
+ locked=false;turn.value='0';turn.onchange();assert.equal(a.lights,11);
+});
+
+test('CARLA forward and right stay forward and right in the editor at every heading',()=>{
+ class Vector3{constructor(x,y,z){Object.assign(this,{x,y,z})}}
+ const origin={x:693,y:-537,z:8.5},ctx=harness(['to3','from3','yawTo3','yawFrom3'],{origin,THREE:{Vector3}});
+ const near=(a,b)=>assert.ok(Math.abs(a-b)<1e-9,`${a} != ${b}`);
+ for(const yaw of [0,45,90,135,180,225,270,315,-90]){
+  const a=yaw*Math.PI/180,angle=ctx.yawTo3(yaw);
+  // CARLA SDK basis: forward=(cos yaw,sin yaw,0), right=(-sin yaw,cos yaw,0).
+  const forward=ctx.to3({x:origin.x+Math.cos(a),y:origin.y+Math.sin(a),z:origin.z});
+  const right=ctx.to3({x:origin.x-Math.sin(a),y:origin.y+Math.cos(a),z:origin.z});
+  // Three.js +X forward rotated about +Y; screen right looking forward with +Y up.
+  near(forward.x,Math.cos(angle));near(forward.z,-Math.sin(angle));near(forward.y,0);
+  near(right.x,-forward.z);near(right.z,forward.x);near(right.y,0);
+  near(ctx.yawFrom3(angle),yaw);
+ }
+ const p={x:685.94342,y:-651.3148,z:8.98824},back=ctx.from3(ctx.to3(p));
+ for(const key of ['x','y','z'])near(back[key],p[key]);
+});
+
+test('actor rebuilding preserves CARLA heading when displaying a saved scene',()=>{
+ class Vector3{constructor(x=0,y=0,z=0){Object.assign(this,{x,y,z})}copy(p){Object.assign(this,p);return this}}
+ const actors=[0,90,180,270].map((yaw,i)=>({id:String(i),x:i,y:i+1,z:10,yaw}));
+ const ctx=harness(['to3','yawTo3','rebuildActors'],{scene:{actors},origin:{x:0,y:0,z:0},THREE:{Vector3},
+  gizmo:{detach(){}},disposeGroup(){},actorGroup:{add(){}},actorMeshes:new Map(),drawRoutes(){},
+  model:()=>({position:new Vector3(),rotation:{y:0}})});
+ ctx.rebuildActors();
+ for(const actor of actors){const mesh=ctx.actorMeshes.get(actor.id),r=actor.yaw*Math.PI/180;
+  assert.equal(mesh.position.z,actor.y);
+  assert.ok(Math.abs(Math.cos(mesh.rotation.y)-Math.cos(r))<1e-9);
+  assert.ok(Math.abs(-Math.sin(mesh.rotation.y)-Math.sin(r))<1e-9);
+ }
 });
 test('save response preserves edits made while the request is in flight',async()=>{
  const request=deferred();let sent;

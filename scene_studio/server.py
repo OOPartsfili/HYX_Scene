@@ -384,7 +384,8 @@ def runs():
     for p in ordered_run_folders():
         try:
             s=json.loads((p/'scene.json').read_text(encoding='utf-8'));status=json.loads((p/'status.json').read_text(encoding='utf-8'))
-            out.append({'id':p.name,'name':s['name'],'state':status['state'],'elapsed':status.get('elapsed',0),'error':status.get('error'),'has_take':(p/'take.json').exists(),'mode':s.get('mode','legacy'),'manual_override':status.get('trajectory_status')=='manual_override'})
+            finished=status['state']=='finished'
+            out.append({'id':p.name,'name':s['name'],'state':status['state'],'elapsed':status.get('elapsed',0),'error':status.get('error'),'has_take':(p/'take.json').exists(),'has_video':finished and (p/'video.mp4').exists(),'has_carla_log':finished and (p/'carla_replay.log').exists(),'mode':s.get('mode','legacy'),'manual_override':status.get('trajectory_status')=='manual_override'})
         except (OSError,ValueError,KeyError,TypeError):pass
         if len(out)>=40:break
     return jsonify(out)
@@ -393,7 +394,7 @@ def runs():
 @app.get('/api/runs/<rid>/<filename>')
 def run_file(rid,filename):
     import re
-    if not re.fullmatch('[A-Za-z0-9_-]+',rid) or filename not in ('telemetry.csv','events.json','scene.json','console.txt','frame.jpg','status.json','take.json','trajectory.jsonl','plan.json','run_manifest.json') and not re.fullmatch(r'shot_[0-9]{7}\.jpg',filename):raise ValueError('文件名无效')
+    if not re.fullmatch('[A-Za-z0-9_-]+',rid) or filename not in ('telemetry.csv','events.json','scene.json','console.txt','frame.jpg','status.json','take.json','trajectory.jsonl','plan.json','run_manifest.json','video.mp4','carla_replay.log') and not re.fullmatch(r'shot_[0-9]{7}\.jpg',filename):raise ValueError('文件名无效')
     return send_from_directory(RUNS/rid,filename,as_attachment=filename!='frame.jpg')
 
 

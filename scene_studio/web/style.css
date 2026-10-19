@@ -9,3 +9,5 @@
 
 .track-row{height:99px}.clip.lane_change{top:37px;height:24px}.clip.follow,.clip.lane_change~.clip.follow{top:64px;height:24px}.clip.lights{top:88px;height:10px}
 input[aria-invalid="true"]{border-color:#df7e82;box-shadow:0 0 0 1px #df7e8266}
+
+.actor-item .lamp-status{display:block;color:#c6d8c3;font-size:10px}
